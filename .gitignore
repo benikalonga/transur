@@ -1,0 +1,25 @@
+# Environment — never commit these
+.env
+.env.local
+.env.production
+.env.production.local
+*.env
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Next.js
+frontend/.next/
+frontend/out/
+
+# Uploads
+backend/uploads/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
