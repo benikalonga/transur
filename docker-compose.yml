@@ -73,7 +73,7 @@ services:
       NEXT_PUBLIC_API_URL: ${API_URL:-http://localhost:5000}
       NEXT_PUBLIC_SOCKET_URL: ${SOCKET_URL:-http://localhost:5000}
     ports:
-      - "3000:3000"
+      - "3001:3000"
     depends_on:
       backend:
         condition: service_healthy
