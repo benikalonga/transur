@@ -18,7 +18,7 @@ Pilote à **Lubumbashi** → expansion Kinshasa.
 -- Connectez-vous à MySQL avec vos accès :
 -- Host: localhost | Port: 3306 | User: root | Password: YOUR_DB_PASSWORD
 
-mysql -u root -pYOUR_DB_PASSWORD < database/schema.sql
+mysql -u root -pYOUR_DB_PASSWORD@sql < database/schema.sql
 ```
 
 Ou via phpMyAdmin / DBeaver : importez `database/schema.sql`.
