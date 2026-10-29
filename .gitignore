@@ -3,7 +3,7 @@
 .env.local
 .env.production
 .env.production.local
-.env.example
+!.env.example
 *.env
 
 # Node
