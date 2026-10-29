@@ -95,7 +95,7 @@ POST /trips
 | GET | `/wallet` | Solde et infos wallet |
 | GET | `/wallet/transactions` | Historique transactions |
 | POST | `/wallet/recharge` | Recharger via Mobile Money |
-| POST | `/wallet/webhook/:provider` | Webhook confirmation paiement |
+| POST | `/wallet/webhook/:provider` | Webhook confirmation paiement (en-tête `X-Webhook-Secret` requis) |
 
 ### Recharge
 ```json

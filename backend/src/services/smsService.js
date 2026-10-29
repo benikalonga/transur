@@ -1,7 +1,8 @@
+const crypto = require('crypto');
 const axios = require('axios');
 
 // Generate 6-digit OTP
-const generateOTP = () => String(Math.floor(100000 + Math.random() * 900000));
+const generateOTP = () => String(crypto.randomInt(100000, 1000000));
 
 // AfricasTalking SMS (primary for DRC)
 const sendViaSafaricom = async (phone, message) => {

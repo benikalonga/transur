@@ -214,7 +214,15 @@ chmod +x deploy.sh
 | Airtel Money | Airtel Money API | developers.airtel.africa |
 | Orange Money | Orange API | developer.orange.com |
 
-Le webhook `/api/wallet/webhook/:provider` reçoit les confirmations de paiement.
+Le webhook `/api/wallet/webhook/:provider` reçoit les confirmations de paiement. L'opérateur doit envoyer l'en-tête `X-Webhook-Secret` égal à `WALLET_WEBHOOK_SECRET` ; les autres requêtes sont refusées.
+
+### Accès admin
+
+Créer (ou réinitialiser) un compte superadmin depuis le dossier backend :
+
+```bash
+npm run admin:create -- vous@exemple.com 'un-long-mot-de-passe' "Votre Nom"
+```
 
 ---
 

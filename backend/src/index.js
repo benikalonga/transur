@@ -22,11 +22,23 @@ const supportRoutes   = require('./routes/support');
 const adminRoutes    = require('./routes/admin');
 const chatRouter     = require('./routes/chat');
 
+// ─── Configuration requise ────────────────────────────────────────────────────
+const isProd = process.env.NODE_ENV === 'production';
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  console.error('❌ JWT_SECRET manquant ou trop court (32 caractères minimum). Générez-le avec : openssl rand -hex 64');
+  process.exit(1);
+}
+if (isProd && !process.env.CLIENT_URL) {
+  console.error('❌ CLIENT_URL est requis en production (origine autorisée pour CORS)');
+  process.exit(1);
+}
+const clientOrigin = process.env.CLIENT_URL || 'http://localhost:3000';
+
 const app    = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: { origin: process.env.CLIENT_URL || '*', methods: ['GET', 'POST'] },
+  cors: { origin: clientOrigin, methods: ['GET', 'POST'] },
   pingTimeout: 60000,
   pingInterval: 25000,
 });
@@ -36,8 +48,8 @@ app.set('io', io);
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression());
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
-app.use(cors({ origin: process.env.CLIENT_URL || '*', credentials: true }));
+app.use(morgan(isProd ? 'combined' : 'dev'));
+app.use(cors({ origin: clientOrigin, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads'));
@@ -45,6 +57,8 @@ app.use('/uploads', express.static('uploads'));
 app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
 app.use('/api/auth/send-otp', rateLimit({ windowMs: 60 * 60 * 1000, max: 10,
   message: { error: 'Trop de tentatives. Réessayez dans 1h.' } }));
+app.use('/api/auth/verify-otp', rateLimit({ windowMs: 15 * 60 * 1000, max: 20,
+  message: { error: 'Trop de tentatives. Réessayez plus tard.' } }));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth',       authRoutes);

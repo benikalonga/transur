@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "db:migrate": "node src/config/migrate.js"
+    "db:migrate": "node src/config/migrate.js",
+    "admin:create": "node src/config/createSuperadmin.js"
   },
   "dependencies": {
     "express": "^4.18.2",

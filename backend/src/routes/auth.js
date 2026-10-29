@@ -25,6 +25,8 @@ const upload = multer({
   fileFilter: (req, file, cb) => cb(null, file.mimetype.startsWith('image/')),
 });
 
+const OTP_MAX_ATTEMPTS = parseInt(process.env.OTP_MAX_ATTEMPTS || '5');
+
 const signToken = (userId) =>
   jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
 
@@ -61,15 +63,24 @@ router.post('/verify-otp',
       const { phone, code, purpose = 'login' } = req.body;
       const { rows: otpRows } = await query(
         `SELECT * FROM otp_codes
-         WHERE phone = ? AND code = ? AND purpose = ? AND used = 0 AND expires_at > UTC_TIMESTAMP()
+         WHERE phone = ? AND purpose = ? AND used = 0 AND expires_at > UTC_TIMESTAMP()
          ORDER BY created_at DESC LIMIT 1`,
-        [phone, code, purpose]
+        [phone, purpose]
       );
-      if (!otpRows[0]) {
-        await query('UPDATE otp_codes SET attempts = attempts + 1 WHERE phone = ? AND used = 0', [phone]);
+      const otp = otpRows[0];
+      if (!otp) return res.status(400).json({ error: 'Code invalide ou expiré' });
+
+      // Trop d'essais → le code est invalidé, il faut en redemander un
+      if (otp.attempts >= OTP_MAX_ATTEMPTS) {
+        await query('UPDATE otp_codes SET used = 1 WHERE id = ?', [otp.id]);
+        return res.status(429).json({ error: 'Trop de tentatives. Demandez un nouveau code.' });
+      }
+
+      if (otp.code !== String(code)) {
+        await query('UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?', [otp.id]);
         return res.status(400).json({ error: 'Code invalide ou expiré' });
       }
-      await query('UPDATE otp_codes SET used = 1 WHERE id = ?', [otpRows[0].id]);
+      await query('UPDATE otp_codes SET used = 1 WHERE id = ?', [otp.id]);
 
       const { rows: userRows } = await query('SELECT * FROM users WHERE phone = ?', [phone]);
       if (userRows[0]) {
