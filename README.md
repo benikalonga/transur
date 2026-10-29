@@ -5,6 +5,20 @@ Pilot in **Lubumbashi** → expansion to Kinshasa.
 
 ---
 
+## Overview
+
+Transur connects clients with taxi drivers and couriers in real time.
+
+- **Clients** sign in with their phone number (SMS OTP), get a fare estimate, and book taxi rides or deliveries.
+- **Drivers and couriers** receive nearby requests live, accept them, and update the job status (arrived → started → completed). Each has a wallet and job history.
+- **Matching** finds the closest available drivers by GPS distance (Haversine), with live updates over WebSockets.
+- **Payments** support cash and Mobile Money (M-Pesa, Airtel Money, Orange Money). Transur takes a 15% commission through the driver's wallet.
+- **Admins** manage users and pricing.
+
+**Tech stack:** Node.js API · MySQL 8 · JWT auth · WebSockets · AfricasTalking SMS · JavaScript web frontend · Docker Compose · Nginx (SSL)
+
+---
+
 ## Quick Start — LOCAL
 
 ### 1. Prerequisites
