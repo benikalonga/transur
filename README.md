@@ -1,37 +1,37 @@
-# Transur — Taxi & Livraison (RDC)
+# Transur — Taxi & Delivery (DRC)
 
-Plateforme de taxi et livraison pour la République Démocratique du Congo.  
-Pilote à **Lubumbashi** → expansion Kinshasa.
+Taxi and delivery platform for the Democratic Republic of the Congo.  
+Pilot in **Lubumbashi** → expansion to Kinshasa.
 
 ---
 
-## Démarrage rapide — LOCAL
+## Quick Start — LOCAL
 
-### 1. Prérequis
+### 1. Prerequisites
 - Node.js 20+
-- MySQL 8.0 (déjà en place avec vos accès)
+- MySQL 8.0 (already set up with your credentials)
 - Git
 
-### 2. Créer la base de données
+### 2. Create the database
 
 ```sql
--- Connectez-vous à MySQL avec vos accès :
+-- Connect to MySQL with your credentials:
 -- Host: localhost | Port: 3306 | User: root | Password: motdepass
 
 mysql -u root -pmotdepass < database/schema.sql
 ```
 
-Ou via phpMyAdmin / DBeaver : importez `database/schema.sql`.
+Or via phpMyAdmin / DBeaver: import `database/schema.sql`.
 
 ### 3. Backend
 
 ```bash
 cd backend
 npm install
-# Le fichier .env est déjà configuré avec vos accès MySQL
+# The .env file is already configured with your MySQL credentials
 npm run dev
-# → API sur http://localhost:5000
-# → Tester: http://localhost:5000/api/health
+# → API at http://localhost:5000
+# → Test: http://localhost:5000/api/health
 ```
 
 ### 4. Frontend
@@ -40,12 +40,12 @@ npm run dev
 cd frontend
 npm install
 npm run dev
-# → App sur http://localhost:3000
+# → App at http://localhost:3000
 ```
 
-### 5. Test OTP en développement
+### 5. Testing OTP in development
 
-En mode `NODE_ENV=development`, les codes OTP sont affichés dans les **logs du terminal backend** — pas besoin de vrai SMS.
+In `NODE_ENV=development` mode, OTP codes are printed in the **backend terminal logs** — no real SMS needed.
 
 ```
 📱 SMS to +243812345678: Votre code Transur : 123456
@@ -53,43 +53,43 @@ En mode `NODE_ENV=development`, les codes OTP sont affichés dans les **logs du 
 
 ---
 
-## Architecture des fichiers
+## File Structure
 
 ```
 Transur/
 ├── backend/
-│   ├── .env                    ← Accès MySQL configurés ✅
+│   ├── .env                    ← MySQL credentials configured ✅
 │   ├── src/
 │   │   ├── config/
-│   │   │   ├── database.js     ← Pool MySQL2
-│   │   │   └── migrate.js      ← Script de migration
-│   │   ├── middleware/         ← Auth JWT, erreurs
+│   │   │   ├── database.js     ← MySQL2 pool
+│   │   │   └── migrate.js      ← Migration script
+│   │   ├── middleware/         ← JWT auth, errors
 │   │   ├── routes/             ← auth, trips, deliveries, wallet, admin, users
 │   │   ├── services/           ← SMS, matching (Haversine), wallet
 │   │   └── socket/             ← WebSocket handler
 ├── frontend/
-│   ├── .env.local              ← URLs API configurées ✅
+│   ├── .env.local              ← API URLs configured ✅
 │   └── src/app/
 │       ├── auth/               ← login, register
 │       ├── client/             ← dashboard, taxi, delivery, history, profile
 │       ├── driver/             ← dashboard, wallet, history, profile
 │       └── delivery/           ← dashboard, wallet, history, profile
 ├── database/
-│   ├── schema.sql              ← MySQL 8.0 complet
-│   └── mysql.cnf               ← Config MySQL optimisée
+│   ├── schema.sql              ← Complete MySQL 8.0 schema
+│   └── mysql.cnf               ← Optimized MySQL config
 ├── nginx/
-│   └── nginx.conf              ← Reverse proxy production
+│   └── nginx.conf              ← Production reverse proxy
 ├── docker-compose.yml          ← MySQL + API + Frontend
-├── deploy.sh                   ← Script déploiement production
-└── .env.production             ← Template variables production
+├── deploy.sh                   ← Production deployment script
+└── .env.production             ← Production environment template
 ```
 
 ---
 
-## Flux utilisateur
+## User Flow
 
 ```
-CLIENT                    SERVEUR                    CHAUFFEUR
+CLIENT                    SERVER                     DRIVER
   │                          │                           │
   │─── POST /auth/send-otp ──►│                           │
   │◄── { message: "OTP..." } ─│                           │
@@ -112,117 +112,117 @@ CLIENT                    SERVEUR                    CHAUFFEUR
 
 ---
 
-## Système de paiement
+## Payment System
 
-### Cash (par défaut)
+### Cash (default)
 ```
-Course 5$ → Chauffeur encaisse 5$ cash
-Transur enregistre: wallet.balance -= 0.75$ (15% commission)
-Si wallet < -5$ → BLOQUÉ jusqu'à recharge
+$5 ride → Driver collects $5 in cash
+Transur records: wallet.balance -= $0.75 (15% commission)
+If wallet < -$5 → BLOCKED until top-up
 ```
 
 ### Mobile Money
 ```
-Client paie via M-Pesa/Airtel → argent sur compte Transur
-Transur verse au chauffeur: 5$ - 15% = 4.25$
-wallet.balance += 4.25$
+Client pays via M-Pesa/Airtel → money goes to the Transur account
+Transur pays the driver: $5 - 15% = $4.25
+wallet.balance += $4.25
 ```
 
 ---
 
-## API — Endpoints principaux
+## API — Main Endpoints
 
-| Méthode | Route | Description |
-|---------|-------|-------------|
-| POST | `/api/auth/send-otp` | Envoyer code OTP |
-| POST | `/api/auth/verify-otp` | Vérifier code → JWT |
-| POST | `/api/auth/register/client` | Inscription client |
-| POST | `/api/auth/register/driver` | Inscription chauffeur |
-| POST | `/api/auth/register/delivery` | Inscription livreur |
-| GET  | `/api/users/me` | Profil complet |
-| POST | `/api/trips/estimate` | Estimer tarif taxi |
-| POST | `/api/trips` | Créer course taxi |
-| POST | `/api/trips/:id/accept` | Accepter (chauffeur) |
-| POST | `/api/trips/:id/complete` | Terminer course |
-| POST | `/api/deliveries/estimate` | Estimer livraison |
-| POST | `/api/deliveries` | Créer livraison |
-| GET  | `/api/wallet` | Solde wallet |
-| POST | `/api/wallet/recharge` | Recharger wallet |
+| Method | Route | Description |
+|--------|-------|-------------|
+| POST | `/api/auth/send-otp` | Send OTP code |
+| POST | `/api/auth/verify-otp` | Verify code → JWT |
+| POST | `/api/auth/register/client` | Client registration |
+| POST | `/api/auth/register/driver` | Driver registration |
+| POST | `/api/auth/register/delivery` | Courier registration |
+| GET  | `/api/users/me` | Full profile |
+| POST | `/api/trips/estimate` | Estimate taxi fare |
+| POST | `/api/trips` | Create taxi ride |
+| POST | `/api/trips/:id/accept` | Accept (driver) |
+| POST | `/api/trips/:id/complete` | Complete ride |
+| POST | `/api/deliveries/estimate` | Estimate delivery |
+| POST | `/api/deliveries` | Create delivery |
+| GET  | `/api/wallet` | Wallet balance |
+| POST | `/api/wallet/recharge` | Top up wallet |
 
-Voir [docs/API.md](docs/API.md) pour la doc complète.
+See [docs/API.md](docs/API.md) for the full documentation.
 
 ---
 
-## Déploiement production (VPS)
+## Production Deployment (VPS)
 
-### Prérequis serveur
+### Server prerequisites
 - Ubuntu 22.04
 - Docker + Docker Compose V2
-- Domaine pointant vers le serveur
+- A domain pointing to the server
 
-### Étapes
+### Steps
 
 ```bash
-# 1. Cloner le projet
-git clone https://github.com/votre-repo/transur.git
+# 1. Clone the project
+git clone https://github.com/your-repo/transur.git
 cd transur
 
-# 2. Configurer les variables
+# 2. Configure the variables
 cp .env.production .env.production.local
-nano .env.production.local  # Remplir toutes les valeurs
+nano .env.production.local  # Fill in all values
 
-# 3. Rendre le script exécutable
+# 3. Make the script executable
 chmod +x deploy.sh
 
-# 4. Premier déploiement (génère SSL, démarre tout)
+# 4. First deployment (generates SSL, starts everything)
 ./deploy.sh setup
 ./deploy.sh start
 
-# 5. Commandes utiles
-./deploy.sh status          # État des services
-./deploy.sh logs backend    # Logs API
-./deploy.sh logs mysql      # Logs MySQL
-./deploy.sh backup          # Sauvegarder MySQL
-./deploy.sh update          # Mettre à jour depuis git
+# 5. Useful commands
+./deploy.sh status          # Service status
+./deploy.sh logs backend    # API logs
+./deploy.sh logs mysql      # MySQL logs
+./deploy.sh backup          # Back up MySQL
+./deploy.sh update          # Update from git
 ```
 
-### Coûts estimés
+### Estimated costs
 
-| Phase | Infrastructure | Coût/mois |
+| Phase | Infrastructure | Cost/month |
 |-------|---------------|-----------|
-| Pilote Lubumbashi (< 500 users) | 1 VPS 4GB RAM | ~$25-40 |
-| Expansion Kinshasa (< 5000 users) | 2 VPS + Load Balancer | ~$80-120 |
+| Lubumbashi pilot (< 500 users) | 1 VPS 4GB RAM | ~$25-40 |
+| Kinshasa expansion (< 5000 users) | 2 VPS + Load Balancer | ~$80-120 |
 | National (> 10k users) | Cluster + CDN | ~$200-400 |
 
 ---
 
 ## SMS — AfricasTalking
 
-1. Créer un compte sur [africastalking.com](https://africastalking.com)
-2. Créer une application "Transur"
-3. Pour les tests: utiliser le **sandbox** (gratuit)
-4. Pour la prod: créditer le compte (env. $0.015/SMS en RDC)
-5. Renseigner `AFRICASTALKING_API_KEY` dans `.env`
+1. Create an account at [africastalking.com](https://africastalking.com)
+2. Create a "Transur" application
+3. For testing: use the **sandbox** (free)
+4. For production: add credit to the account (approx. $0.015/SMS in the DRC)
+5. Set `AFRICASTALKING_API_KEY` in `.env`
 
 ---
 
-## Mobile Money — Intégration
+## Mobile Money — Integration
 
-| Opérateur | API | Documentation |
-|-----------|-----|---------------|
+| Provider | API | Documentation |
+|----------|-----|---------------|
 | Vodacom M-Pesa | Daraja API | developer.safaricom.com |
 | Airtel Money | Airtel Money API | developers.airtel.africa |
 | Orange Money | Orange API | developer.orange.com |
 
-Le webhook `/api/wallet/webhook/:provider` reçoit les confirmations de paiement.
+The `/api/wallet/webhook/:provider` webhook receives payment confirmations.
 
 ---
 
-## Tarification par défaut (modifiable via admin)
+## Default Pricing (editable via admin)
 
-| Service | Base | Par km | Minimum | Commission |
+| Service | Base | Per km | Minimum | Commission |
 |---------|------|--------|---------|------------|
 | Taxi | $2.00 | $0.50/km | $2.00 | 15% |
-| Livraison | $1.50 | $0.40/km | $1.50 | 15% |
+| Delivery | $1.50 | $0.40/km | $1.50 | 15% |
 
-Modifier via `POST /api/admin/pricing/:id` (token admin requis).
+Update via `POST /api/admin/pricing/:id` (admin token required).
