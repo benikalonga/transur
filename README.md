@@ -19,6 +19,47 @@ Transur connects clients with taxi drivers and couriers in real time.
 
 ---
 
+## Built for Rural & Low-Connectivity Areas
+
+Transur is meant for use outside big cities, in rural areas and places with weak network coverage. Users there often have:
+
+- **Unstable 2G/3G (EDGE)** connections that drop often, especially on the move
+- **Low-end Android phones** with little memory and storage
+- **Expensive mobile data**, so every kilobyte costs users money
+- **Imprecise GPS** inside buildings or in remote areas
+- **SMS that works where mobile internet doesn't**
+
+### Technical design
+
+| Area | What is implemented | Where |
+|------|---------------------|-------|
+| **Lightweight client** | Progressive Web App (PWA) installed from the browser. No app-store download, works on low-end Android phones, opens full-screen like a native app. | `frontend/public/manifest.json` |
+| **Login without internet data** | Login by phone number and SMS one-time code (OTP), with no password or email. The SMS arrives over the GSM network even when mobile data is weak. | `backend/src/services/smsService.js` |
+| **Smaller data transfer** | Gzip compression on all API responses (Express `compression` plus Nginx `gzip`). Static files are cached in the browser for 30 days, so they aren't downloaded again on each visit. | `backend/src/index.js`, `nginx/nginx.conf` |
+| **Tolerant timeouts** | The API client waits 15 s before giving up on a request, longer than the usual default, to cope with slow connections. | `frontend/src/lib/api.js` |
+| **Real-time link that survives poor coverage** | Socket.IO uses WebSocket first and **falls back to HTTP long-polling** when WebSocket can't connect on poor or proxied networks. It reconnects automatically (5 tries, 2 s apart). The server waits up to 60 s for a missed heartbeat before treating the user as disconnected. | `frontend/src/lib/socket.js`, `backend/src/index.js` |
+| **Session survives a dropped connection** | The session token and user profile are stored on the device, so a dropped connection or a closed app doesn't log the user out. The driver's online status is also restored from the device after a reload. | `frontend/src/app/driver/page.js` |
+| **Rejoining after a reconnect** | On every reconnection the server automatically puts the user back in their private channel (`user:<id>`), so ride updates reach them again. | `backend/src/socket/socketHandler.js` |
+| **GPS fallback** | Drivers' phones try precise GPS first (8–10 s timeout). If that fails, they fall back to a less precise location, and a background update every 5 min stops the stored driver position from going stale. | `frontend/src/app/driver/page.js` |
+| **Rides never get stuck** | A ride request with no driver is cancelled automatically after 3 minutes, and the client is notified. | `backend/src/routes/trips.js` |
+| **Cash-first payments** | Cash is the default payment, so a ride can be completed even with no connection at payment time. The commission is settled later through the driver's wallet. | `backend/src/services/walletService.js` |
+| **Small payloads** | Request bodies are capped at 2 MB, and the API is rate-limited to protect the server. | `backend/src/index.js` |
+
+### Roadmap — offline and very-low-bandwidth support
+
+These are **not implemented yet**:
+
+- [ ] **Service worker / offline mode:** cache the app shell so it opens with no network, and queue actions (accept, start, complete) to send when the connection returns.
+- [ ] **SMS notifications as a fallback:** `sendTripNotification()` already exists in `smsService.js` but nothing calls it. Send it when a client's real-time connection is down.
+- [ ] **Unlimited reconnection with increasing delays:** currently the app stops after 5 reconnection attempts. On rural networks it should keep retrying, waiting longer between attempts each time.
+- [ ] **Restore state after reconnecting:** when the connection comes back, fetch the current ride status so the app catches up on any events it missed.
+- [ ] **Send fewer GPS updates:** batch position updates or send them less often to save data and battery.
+- [ ] **Offline map tiles:** maps currently load tiles live from OpenStreetMap. Pre-cache tiles for each service area.
+- [ ] **USSD channel (`*xxx#`)** for booking a ride from a basic phone with no internet.
+- [ ] **Data-saver mode:** hide the map and use text-only screens on 2G connections.
+
+---
+
 ## Quick Start — LOCAL
 
 ### 1. Prerequisites
