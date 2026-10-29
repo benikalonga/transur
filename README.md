@@ -281,3 +281,9 @@ The `/api/wallet/webhook/:provider` webhook receives payment confirmations.
 | Delivery | $1.50 | $0.40/km | $1.50 | 15% |
 
 Update via `POST /api/admin/pricing/:id` (admin token required).
+
+---
+
+## License
+
+MIT © 2026 Beni Kalonga. See [LICENSE](LICENSE).
