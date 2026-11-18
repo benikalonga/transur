@@ -1,12 +1,15 @@
 FROM node:20-alpine
-WORKDIR /app
+WORKDIR /srv/api
 
-# Dépendances d'abord pour cache Docker
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev && npm cache clean --force
 
 COPY src ./src
-RUN mkdir -p uploads/profiles
+RUN mkdir -p uploads/avatars && chown -R node:node /srv/api
+USER node
 
+ENV NODE_ENV=production
 EXPOSE 5000
-CMD ["node", "src/index.js"]
+
+# Apply schema changes, then boot the API
+CMD ["sh", "-c", "node src/db/migrate.js && node src/server.js"]

@@ -1,297 +1,248 @@
-# Transur — Taxi & Delivery (DRC)
+# Transur
 
-Taxi and delivery platform for the Democratic Republic of the Congo.  
-Pilot in **Lubumbashi** → expansion to Kinshasa.
+**On-demand rides and parcel delivery where riders name their price.**
 
----
+Transur is a full e-hailing platform: a mobile-first web app for riders, drivers and couriers, plus an
+operations console for the team running the network. Riders propose a fare, nearby drivers accept it or
+counter-offer, and the rider picks the offer they like. The same engine powers parcel delivery, with a
+handover PIN so packages only go to the right person.
 
-## Overview
+It is built to work well on low-end Android phones and patchy 2G/3G networks: it installs as a PWA,
+signs people in by SMS code, keeps working through dropped connections, and supports cash alongside
+mobile money.
 
-Transur connects clients with taxi drivers and couriers in real time.
-
-- **Clients** sign in with their phone number (SMS OTP), get a fare estimate, and book taxi rides or deliveries.
-- **Drivers and couriers** receive nearby requests live, accept them, and update the job status (arrived → started → completed). Each has a wallet and job history.
-- **Matching** finds the closest available drivers by GPS distance (Haversine), with live updates over WebSockets.
-- **Payments** support cash and Mobile Money (M-Pesa, Airtel Money, Orange Money). Transur takes a 15% commission through the driver's wallet.
-- **Admins** manage users and pricing.
-
-**Tech stack:** Node.js API · MySQL 8 · JWT auth · WebSockets · AfricasTalking SMS · JavaScript web frontend · Docker Compose · Nginx (SSL)
+Transur started as a taxi and delivery pilot for **Lubumbashi (DR Congo)**. This version is a full rewrite
+of the first prototype, and the defaults (Congolese franc display, Lubumbashi map, `.cd` address search) are set
+for that market. Every one of them is a setting, so the platform works in any city.
 
 ---
 
-## Built for Rural & Low-Connectivity Areas
+## Features
 
-Transur is meant for use outside big cities, in rural areas and places with weak network coverage. Users there often have:
+### For riders
+- **Rides in four classes** — Moto, Economy, Comfort and XL, each with its own fare rule and seat count.
+- **Name your price** — the app suggests a fare; riders can offer down to 80% of it or bid higher for a faster pickup.
+- **Live offers** — driver counter-offers arrive in real time with photo, vehicle, plate, rating, verification badge and ETA.
+- **Parcel delivery** — small/medium/large sizes, recipient details, an SMS to the recipient on delivery, and a
+  4-digit **handover PIN** the courier must enter to complete the job.
+- **Scheduled bookings** — book up to 7 days ahead; the request is released to the fleet 10 minutes before pickup.
+- **Promo codes** — percent or flat discounts with caps, minimum fares, usage limits and expiry dates.
+- **Referrals** — every rider has an invite code. New riders get a welcome discount; the referrer gets a
+  reward code after the friend's first completed trip.
+- **Saved places** — home, work and favourites for one-tap booking, plus "book again" from any past trip.
+- **Live tracking** — vehicle on the map, route preview, in-trip chat with quick replies, and one-tap call.
+- **Safety toolkit** — share a public live-tracking link, trusted contacts, and an **SOS** button that alerts the
+  safety team and texts trusted contacts with your location.
+- **Ratings, tips and receipts** — rate after every trip, tip in cash or mobile money, view an itemised receipt.
+- **Inbox and help centre** — trip updates, receipts and offers in one place, and live chat with support.
 
-- **Unstable 2G/3G (EDGE)** connections that drop often, especially on the move
-- **Low-end Android phones** with little memory and storage
-- **Expensive mobile data**, so every kilobyte costs users money
-- **Imprecise GPS** inside buildings or in remote areas
-- **SMS that works where mobile internet doesn't**
+### For drivers and couriers
+- **One-tap online/offline** with background GPS streaming (throttled to save data and battery).
+- **Request cards** with fare, distance to pickup, trip length, payment method, parcel details and an expiry timer.
+- **Accept or counter-offer**, withdraw an offer, or dismiss a request.
+- **Guided trip flow** — Arrived → Start → Complete, with turn-by-turn hand-off to Google Maps.
+- **Earnings dashboard** — today / 7 days / all time, tips, distance, a 7-day chart and response rate.
+- **Wallet** — commission ledger, mobile money top-ups, automatic lock when debt passes the limit.
+- **Vehicle profile** with document verification by the operations team.
 
-### Technical design
-
-| Area | What is implemented | Where |
-|------|---------------------|-------|
-| **Lightweight client** | Progressive Web App (PWA) installed from the browser. No app-store download, works on low-end Android phones, opens full-screen like a native app. | `frontend/public/manifest.json` |
-| **Login without internet data** | Login by phone number and SMS one-time code (OTP), with no password or email. The SMS arrives over the GSM network even when mobile data is weak. | `backend/src/services/smsService.js` |
-| **Smaller data transfer** | Gzip compression on all API responses (Express `compression` plus Nginx `gzip`). Static files are cached in the browser for 30 days, so they aren't downloaded again on each visit. | `backend/src/index.js`, `nginx/nginx.conf` |
-| **Tolerant timeouts** | The API client waits 15 s before giving up on a request, longer than the usual default, to cope with slow connections. | `frontend/src/lib/api.js` |
-| **Real-time link that survives poor coverage** | Socket.IO uses WebSocket first and **falls back to HTTP long-polling** when WebSocket can't connect on poor or proxied networks. It reconnects automatically (5 tries, 2 s apart). The server waits up to 60 s for a missed heartbeat before treating the user as disconnected. | `frontend/src/lib/socket.js`, `backend/src/index.js` |
-| **Session survives a dropped connection** | The session token and user profile are stored on the device, so a dropped connection or a closed app doesn't log the user out. The driver's online status is also restored from the device after a reload. | `frontend/src/app/driver/page.js` |
-| **Rejoining after a reconnect** | On every reconnection the server automatically puts the user back in their private channel (`user:<id>`), so ride updates reach them again. | `backend/src/socket/socketHandler.js` |
-| **GPS fallback** | Drivers' phones try precise GPS first (8–10 s timeout). If that fails, they fall back to a less precise location, and a background update every 5 min stops the stored driver position from going stale. | `frontend/src/app/driver/page.js` |
-| **Rides never get stuck** | A ride request with no driver is cancelled automatically after 3 minutes, and the client is notified. | `backend/src/routes/trips.js` |
-| **Cash-first payments** | Cash is the default payment, so a ride can be completed even with no connection at payment time. The commission is settled later through the driver's wallet. | `backend/src/services/walletService.js` |
-| **Small payloads** | Request bodies are capped at 2 MB, and the API is rate-limited to protect the server. | `backend/src/index.js` |
-
-### Roadmap — offline and very-low-bandwidth support
-
-These are **not implemented yet**:
-
-- [ ] **Service worker / offline mode:** cache the app shell so it opens with no network, and queue actions (accept, start, complete) to send when the connection returns.
-- [ ] **SMS notifications as a fallback:** `sendTripNotification()` already exists in `smsService.js` but nothing calls it. Send it when a client's real-time connection is down.
-- [ ] **Unlimited reconnection with increasing delays:** currently the app stops after 5 reconnection attempts. On rural networks it should keep retrying, waiting longer between attempts each time.
-- [ ] **Restore state after reconnecting:** when the connection comes back, fetch the current ride status so the app catches up on any events it missed.
-- [ ] **Send fewer GPS updates:** batch position updates or send them less often to save data and battery.
-- [ ] **Offline map tiles:** maps currently load tiles live from OpenStreetMap. Pre-cache tiles for each service area.
-- [ ] **USSD channel (`*xxx#`)** for booking a ride from a basic phone with no internet.
-- [ ] **Data-saver mode:** hide the map and use text-only screens on 2G connections.
+### For the operations team (console at `/console`)
+- **Overview** — gross bookings, platform fees, promo spend, today's bookings, sign-ups, live supply.
+- **Live map** — every online/busy driver and courier plus open requests, streamed in real time.
+- **Bookings** — search and filter everything; see offers, chat history and the money split; cancel when needed.
+- **People** — riders, drivers and couriers; verify documents, suspend or ban, adjust wallets, start a support chat.
+- **Wallets & ledger** — balances owed in each direction, locks, and every ledger entry.
+- **Finance** — revenue, fees and promotion cost for any period, split by service and payment method, top earners, CSV export.
+- **Fares** — edit base fare, per-km, per-minute, minimum, commission and **surge** for each vehicle class.
+- **Promotions** — create and pause campaign codes; see referral and gift codes and their cost.
+- **Safety** — SOS alerts with location and trip context; acknowledge (the user is notified) and resolve.
+- **Help desk** — real-time conversations with canned replies.
+- **Team** — staff request access; owners approve, promote or remove them.
 
 ---
 
-## Quick Start — LOCAL
+## How the marketplace works
 
-### 1. Prerequisites
-- Node.js 20+
-- MySQL 8.0 (already set up with your credentials)
-- Git
-
-### 2. Create the database
-
-```sql
--- Connect to MySQL with your credentials:
--- Host: localhost | Port: 3306 | User: root | Password: YOUR_DB_PASSWORD
-
-mysql -u root -pYOUR_DB_PASSWORD < database/schema.sql
+```
+ Rider                          API                              Nearby providers
+   │  POST /bookings/quote  ───►  prices for every class
+   │  POST /bookings        ───►  status = searching ──► booking:new ─────────►│
+   │                              (or scheduled → released by the job runner)  │
+   │◄── booking:bid ────────────  POST /bookings/:id/bids  ◄───────────────────│ accept / counter
+   │  POST …/bids/:id/accept ──►  status = assigned ──────► booking:won / lost ►│
+   │◄── provider:position ──────  fleet:position (socket, every ≥5 s / 25 m) ◄──│
+   │◄── booking:arrived / started / completed ◄── POST …/arrive /start /complete│
 ```
 
-Or via phpMyAdmin / DBeaver: import `database/schema.sql`.
+Requests nobody accepts within 3 minutes are cancelled by a background job, and the rider is told to try a
+higher offer. Because these jobs run from cron rather than in-memory timers, nothing is lost if the API restarts.
 
-### 3. Backend
+### Money
+
+All amounts are stored in one base currency (USD by default). The web app converts for display with
+`NEXT_PUBLIC_CURRENCY` and `NEXT_PUBLIC_CURRENCY_RATE`, so a market that prices in local currency only changes config.
+
+| Payment | What happens at completion |
+|---|---|
+| **Cash** | The provider collects `fare − promo discount`. The platform fee is **debited** from the provider's wallet, and any promo discount is **credited** back, so promos are always funded by the platform. |
+| **Mobile money** | The platform holds the payment and **credits** `fare − platform fee` to the provider's wallet. |
+| **Tips** | Cash tips are recorded; mobile money tips are credited to the provider's wallet. |
+
+A wallet locks automatically when its balance reaches `WALLET_DEBT_LIMIT` (default −5.00). A locked provider
+can't send offers until they top up. Staff can also lock or unlock wallets by hand.
+
+---
+
+## Built for low connectivity
+
+| Concern | What Transur does |
+|---|---|
+| Data cost | Gzip on every API response and at Nginx; static assets cached for a year; simplified route geometry. |
+| No app store | Installable PWA that runs full-screen on low-end Android phones. |
+| Sign-in without data | Phone + SMS code; no passwords to forget. |
+| Dropped connections | Socket.IO falls back to long-polling and **reconnects forever** with growing back-off. On reconnect, the app refetches the current booking and the server re-sends open requests to providers. |
+| Lost GPS | High-accuracy fix first, coarse fallback second; positions also go over HTTP when the socket is down, with a heartbeat so supply never looks stale. Providers silent for 15 minutes are taken offline automatically. |
+| Slow requests | 20 s client timeout with friendly "you appear to be offline" messages. |
+| Reloads | Session, profile and "I was online" state live on the device; active trips restore after a refresh. |
+| No data at all | SMS to the parcel recipient on delivery and to trusted contacts on SOS. |
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Web app | Next.js 14 (App Router), React 18, Tailwind CSS, Leaflet + OpenStreetMap, Socket.IO client |
+| API | Node.js 20, Express 4, Socket.IO 4, node-cron |
+| Database | MySQL 8 |
+| Auth | SMS one-time codes (Africa's Talking) + JWT; bcrypt for staff passwords |
+| Routing & search | OSRM for routes, Nominatim for address search and reverse geocoding |
+| Ops | Docker Compose, Nginx (TLS, gzip, WebSockets), Let's Encrypt |
+
+---
+
+## Project structure
+
+```
+transur/
+├── backend/
+│   └── src/
+│       ├── server.js            # boots HTTP + Socket.IO + job runner
+│       ├── app.js               # Express app, middleware and route mounting
+│       ├── config/              # env loading/validation, static catalog (classes, payments…)
+│       ├── db/                  # pool helpers, schema (single source of truth), migrate
+│       ├── middleware/          # user/staff auth, error responder
+│       ├── services/            # bookings engine, dispatch, pricing, wallet ledger, promos, fleet, sms, notify
+│       ├── realtime/            # socket handlers, event hub, help desk
+│       ├── jobs/                # scheduled releases, request expiry, stale-provider cleanup
+│       ├── routes/              # auth, me, bookings, wallet, engagement, console/*
+│       └── scripts/createOwner.js
+├── frontend/
+│   └── src/
+│       ├── app/
+│       │   ├── login/           # phone → code → sign-up
+│       │   ├── rider/           # home, ride, send, trips, inbox, account, places, safety, promos, invite, help
+│       │   ├── driver/          # dashboard, earnings, jobs, inbox, account, help
+│       │   ├── courier/         # same screens as drivers, for parcels
+│       │   ├── track/[token]/   # public live-trip page
+│       │   └── console/         # operations console
+│       ├── components/          # booking flow, fleet dashboard, maps, shared screens, console kit, UI
+│       └── lib/                 # API client, sockets, session, geo, formatting
+├── docs/API.md                  # endpoint and event reference
+├── nginx/nginx.conf
+├── docker-compose.yml
+└── deploy.sh
+```
+
+---
+
+## Running locally
+
+**Requirements:** Node.js 20+, MySQL 8.
+
+### 1. API
 
 ```bash
 cd backend
+cp .env.example .env        # set DB_* and a JWT_SECRET of 32+ characters
 npm install
-# The .env file is already configured with your MySQL credentials
-npm run dev
-# → API at http://localhost:5000
-# → Test: http://localhost:5000/api/health
+npm run db:migrate          # creates the database, all tables and default fares
+npm run staff:owner -- you@example.com 'a-strong-password' "Your Name"
+npm run dev                 # http://localhost:5000/api/health
 ```
 
-### 4. Frontend
+In development, SMS codes are printed in the API terminal and mobile money payments settle instantly,
+so you can test every flow without external accounts.
+
+### 2. Web app
 
 ```bash
 cd frontend
+cp .env.example .env.local  # point NEXT_PUBLIC_API_URL at the API
 npm install
-npm run dev
-# → App at http://localhost:3000
+npm run dev                 # http://localhost:3000
 ```
 
-### 5. Testing OTP in development
+- Riders, drivers and couriers sign up at `/login` (pick a role on the last step).
+- Staff sign in at `/console/login` with the owner account created above.
+- Open two browsers (or a private window) to play rider and driver at the same time.
 
-In `NODE_ENV=development` mode, OTP codes are printed in the **backend terminal logs** — no real SMS needed.
+### Configuration
 
-```
-📱 SMS to +243812345678: Votre code Transur : 123456
-```
+| Variable (API) | Default | Meaning |
+|---|---|---|
+| `APP_URL` | `http://localhost:3000` | Allowed CORS origin and base for share links |
+| `DISPATCH_RADIUS_KM` | `15` | How far requests are broadcast |
+| `REQUEST_TTL_MINUTES` | `3` | How long a request stays open for offers |
+| `SCHEDULE_LEAD_MINUTES` | `10` | When scheduled bookings are released |
+| `WALLET_DEBT_LIMIT` | `-5.00` | Balance at which a fleet wallet locks |
+| `REFERRAL_WELCOME_DISCOUNT` / `REFERRAL_REWARD_DISCOUNT` | `1.00` / `1.50` | Referral code values |
+| `PAYMENT_WEBHOOK_SECRET` | — | Shared secret for mobile money callbacks |
+
+| Variable (web) | Default | Meaning |
+|---|---|---|
+| `NEXT_PUBLIC_CURRENCY` / `NEXT_PUBLIC_CURRENCY_RATE` | `USD` / `1` | Display currency and conversion from the base currency |
+| `NEXT_PUBLIC_PRICE_STEP` | `0.25` | Smallest offer increment (display currency) |
+| `NEXT_PUBLIC_MAP_CENTER` | `0,0` | Where maps open before GPS is available |
+| `NEXT_PUBLIC_SEARCH_COUNTRY` | — | Restrict address search to a country code |
 
 ---
 
-## File Structure
-
-```
-Transur/
-├── backend/
-│   ├── .env                    ← MySQL credentials configured ✅
-│   ├── src/
-│   │   ├── config/
-│   │   │   ├── database.js     ← MySQL2 pool
-│   │   │   └── migrate.js      ← Migration script
-│   │   ├── middleware/         ← JWT auth, errors
-│   │   ├── routes/             ← auth, trips, deliveries, wallet, admin, users
-│   │   ├── services/           ← SMS, matching (Haversine), wallet
-│   │   └── socket/             ← WebSocket handler
-├── frontend/
-│   ├── .env.local              ← API URLs configured ✅
-│   └── src/app/
-│       ├── auth/               ← login, register
-│       ├── client/             ← dashboard, taxi, delivery, history, profile
-│       ├── driver/             ← dashboard, wallet, history, profile
-│       └── delivery/           ← dashboard, wallet, history, profile
-├── database/
-│   ├── schema.sql              ← Complete MySQL 8.0 schema
-│   └── mysql.cnf               ← Optimized MySQL config
-├── nginx/
-│   └── nginx.conf              ← Production reverse proxy
-├── docker-compose.yml          ← MySQL + API + Frontend
-├── deploy.sh                   ← Production deployment script
-└── .env.production             ← Production environment template
-```
-
----
-
-## User Flow
-
-```
-CLIENT                    SERVER                     DRIVER
-  │                          │                           │
-  │─── POST /auth/send-otp ──►│                           │
-  │◄── { message: "OTP..." } ─│                           │
-  │─── POST /auth/verify-otp ─►│                           │
-  │◄── { token, user } ───────│                           │
-  │                          │                           │
-  │─── POST /trips ───────────►│                           │
-  │  (pickup, dropoff, pmt)   │──emit: new_trip_request ──►│
-  │                          │                           │
-  │                          │◄─── POST /trips/:id/accept─│
-  │◄── emit: trip_accepted ──│                           │
-  │    (driver info)         │                           │
-  │                          │                           │
-  │◄── emit: driver_arrived ─│◄── POST /trips/:id/pickup ─│
-  │◄── emit: trip_started ───│◄── POST /trips/:id/start ──│
-  │◄── emit: trip_completed ─│◄── POST /trips/:id/complete│
-  │                          │                           │
-  │                          │  [Wallet: -commission] ───►│
-```
-
----
-
-## Payment System
-
-### Cash (default)
-```
-$5 ride → Driver collects $5 in cash
-Transur records: wallet.balance -= $0.75 (15% commission)
-If wallet < -$5 → BLOCKED until top-up
-```
-
-### Mobile Money
-```
-Client pays via M-Pesa/Airtel → money goes to the Transur account
-Transur pays the driver: $5 - 15% = $4.25
-wallet.balance += $4.25
-```
-
----
-
-## API — Main Endpoints
-
-| Method | Route | Description |
-|--------|-------|-------------|
-| POST | `/api/auth/send-otp` | Send OTP code |
-| POST | `/api/auth/verify-otp` | Verify code → JWT |
-| POST | `/api/auth/register/client` | Client registration |
-| POST | `/api/auth/register/driver` | Driver registration |
-| POST | `/api/auth/register/delivery` | Courier registration |
-| GET  | `/api/users/me` | Full profile |
-| POST | `/api/trips/estimate` | Estimate taxi fare |
-| POST | `/api/trips` | Create taxi ride |
-| POST | `/api/trips/:id/accept` | Accept (driver) |
-| POST | `/api/trips/:id/complete` | Complete ride |
-| POST | `/api/deliveries/estimate` | Estimate delivery |
-| POST | `/api/deliveries` | Create delivery |
-| GET  | `/api/wallet` | Wallet balance |
-| POST | `/api/wallet/recharge` | Top up wallet |
-
-See [docs/API.md](docs/API.md) for the full documentation.
-
----
-
-## Production Deployment (VPS)
-
-### Server prerequisites
-- Ubuntu 22.04
-- Docker + Docker Compose V2
-- A domain pointing to the server
-
-### Steps
+## Deploying
 
 ```bash
-# 1. Clone the project
-git clone https://github.com/your-repo/transur.git
-cd transur
-
-# 2. Configure the variables
-cp .env.production .env.production.local
-nano .env.production.local  # Fill in all values
-
-# 3. Make the script executable
-chmod +x deploy.sh
-
-# 4. First deployment (generates SSL, starts everything)
-./deploy.sh setup
-./deploy.sh start
-
-# 5. Useful commands
-./deploy.sh status          # Service status
-./deploy.sh logs backend    # API logs
-./deploy.sh logs mysql      # MySQL logs
-./deploy.sh backup          # Back up MySQL
-./deploy.sh update          # Update from git
+cp .env.example .env               # fill in every secret and your domain
+./deploy.sh certs                  # Let's Encrypt certificate for $DOMAIN
+./deploy.sh up                     # MySQL + API + web + Nginx
+./deploy.sh owner you@example.com 'a-strong-password' "Your Name"
+./deploy.sh status                 # health check
+./deploy.sh backup                 # gzipped mysqldump into ./backups
+./deploy.sh update                 # pull and rebuild
 ```
 
-### Estimated costs
+The API container runs migrations on start, so schema changes ship with the code.
 
-| Phase | Infrastructure | Cost/month |
-|-------|---------------|-----------|
-| Lubumbashi pilot (< 500 users) | 1 VPS 4GB RAM | ~$25-40 |
-| Kinshasa expansion (< 5000 users) | 2 VPS + Load Balancer | ~$80-120 |
-| National (> 10k users) | Cluster + CDN | ~$200-400 |
+### Mobile money
 
----
-
-## SMS — AfricasTalking
-
-1. Create an account at [africastalking.com](https://africastalking.com)
-2. Create a "Transur" application
-3. For testing: use the **sandbox** (free)
-4. For production: add credit to the account (approx. $0.015/SMS in the DRC)
-5. Set `AFRICASTALKING_API_KEY` in `.env`
+Top-ups and in-app tips create a *payment intent* with a unique reference. Point your operator's callback at
+`POST /api/wallet/webhooks/<provider>` with the header `X-Webhook-Secret: $PAYMENT_WEBHOOK_SECRET` and a body of
+`{ "reference", "amount", "status": "SUCCESS" }`. Settlement is idempotent and rejects amount mismatches.
 
 ---
 
-## Mobile Money — Integration
+## Roadmap
 
-| Provider | API | Documentation |
-|----------|-----|---------------|
-| Vodacom M-Pesa | Daraja API | developer.safaricom.com |
-| Airtel Money | Airtel Money API | developers.airtel.africa |
-| Orange Money | Orange API | developer.orange.com |
-
-The `/api/wallet/webhook/:provider` webhook receives payment confirmations. The provider must send the `X-Webhook-Secret` header matching `WALLET_WEBHOOK_SECRET`; other requests are rejected.
-
-### Admin access
-
-Create (or reset) a superadmin account from the backend folder:
-
-```bash
-npm run admin:create -- you@example.com 'a-long-password' "Your Name"
-```
-
----
-
-## Default Pricing (editable via admin)
-
-| Service | Base | Per km | Minimum | Commission |
-|---------|------|--------|---------|------------|
-| Taxi | $2.00 | $0.50/km | $2.00 | 15% |
-| Delivery | $1.50 | $0.40/km | $1.50 | 15% |
-
-Update via `POST /api/admin/pricing/:id` (admin token required).
+- Native push notifications (the `push_token` field is already stored).
+- Offline app shell with a service worker and queued actions.
+- Automated tests for the bidding, dispatch and wallet code.
+- Offline map tiles for each service area, and a data-saver mode for 2G.
+- French and Lingala/Swahili translations of the app.
+- Multi-stop rides and round trips.
+- Corporate accounts with monthly invoicing.
+- Automated payouts of positive fleet balances.
+- USSD booking for feature phones.
 
 ---
 
 ## License
 
-MIT © 2026 YOUR_NAME. See [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).

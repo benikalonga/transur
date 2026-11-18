@@ -1,168 +1,105 @@
-# Transur API Documentation
+# Transur API reference
 
-Base URL: `http://localhost:5000/api`
+Base URL: `/api`. All bodies are JSON unless noted. Authenticated routes need
+`Authorization: Bearer <token>`. Errors always look like `{ "error": "message" }`.
+Amounts are in the platform base currency (USD by default).
 
-## Authentication
+## Auth (phone + one-time code)
 
-All protected routes require: `Authorization: Bearer <JWT_TOKEN>`
+| Method | Path | Body | Notes |
+|---|---|---|---|
+| POST | `/auth/code` | `{ phone }` | Sends a 6-digit SMS code (printed to the console in development). |
+| POST | `/auth/verify` | `{ phone, code }` | Existing user → `{ isNew:false, token, user }`. New number → `{ isNew:true, phoneProof }`. |
+| POST | `/auth/signup` | multipart: `phoneProof, role, full_name, email?, referral_code?, vehicle_class?, vehicle_make?, vehicle_color?, plate_number?, licence_number?, avatar?` | `role` is `rider`, `driver` or `courier`. Drivers pick `moto/economy/comfort/xl`; couriers pick `bicycle/moto/car/on_foot`. |
 
----
+## Account — `/me`
 
-## Auth
+| Method | Path | Who | Purpose |
+|---|---|---|---|
+| GET | `/me` | all | Profile, plus vehicle, rating and wallet fields for fleet. |
+| PATCH | `/me` | all | `full_name`, `email`, `push_token`, or multipart `avatar`. |
+| PATCH | `/me/vehicle` | fleet | Update vehicle details (plate change removes verification). |
+| PATCH | `/me/availability` | fleet | `{ availability: online|offline, position? }` |
+| POST | `/me/position` | fleet | `{ lat, lng, heading?, speed? }` — HTTP fallback when the socket is down. |
+| GET | `/me/requests` | fleet | Open requests near the provider (used after reconnecting). |
+| GET | `/me/earnings` | fleet | Today / 7-day / lifetime totals, daily series, response rate. |
+| GET | `/me/referrals` | all | Own referral code and invited friends. |
+| GET/POST/DELETE | `/me/places[/:id]` | all | Saved places (`home`, `work`, `other`; max 20). |
+| GET/POST/DELETE | `/me/contacts[/:id]` | all | Trusted contacts texted on SOS (max 5). |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/auth/send-otp` | Envoyer code OTP par SMS |
-| POST | `/auth/verify-otp` | Vérifier OTP → retourne token ou tempToken |
-| POST | `/auth/register/client` | Inscription client |
-| POST | `/auth/register/driver` | Inscription chauffeur (multipart) |
-| POST | `/auth/register/delivery` | Inscription livreur (multipart) |
+## Bookings (rides and parcels)
 
-### Send OTP
-```json
-POST /auth/send-otp
-{ "phone": "+243812345678", "purpose": "login" }
-```
+One engine handles both services. `service` is `ride` or `parcel`.
 
-### Verify OTP
-```json
-POST /auth/verify-otp
-{ "phone": "+243812345678", "code": "123456" }
-// Returns: { token, user } OR { tempToken, isNewUser: true }
-```
+| Method | Path | Who | Purpose |
+|---|---|---|---|
+| POST | `/bookings/quote` | rider | `{ service, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, parcel_size?, promo_code? }` → every vehicle class with price, floor, nearby supply and pickup ETA. |
+| POST | `/bookings` | rider | Create. Adds `vehicle_class`, `rider_offer`, `payment_method`, `promo_code?`, `scheduled_for?`, `note?`; parcels also need `recipient_name`, `recipient_phone`, and accept `parcel_size`, `parcel_details`. |
+| GET | `/bookings` | all | History. `?service=&scope=open|past&page=&limit=` |
+| GET | `/bookings/current` | all | The live booking, if any (restores state after a reload). |
+| GET | `/bookings/:id` | participant | Full details. The parcel handover PIN is only returned to the sender. |
+| POST | `/bookings/:id/bids` | fleet | `{ amount }` — accept the rider's price (same amount) or counter-offer. |
+| DELETE | `/bookings/:id/bids/mine` | fleet | Withdraw an offer. |
+| GET | `/bookings/:id/bids` | rider | Open offers, cheapest first. |
+| POST | `/bookings/:id/bids/:bidId/accept` | rider | Assign the provider. |
+| POST | `/bookings/:id/arrive` · `/start` · `/complete` | provider | Progress the trip. Parcels need `{ pin }` on complete. |
+| POST | `/bookings/:id/cancel` | participant | `{ reason? }` |
+| POST | `/bookings/:id/rating` | participant | `{ stars, feedback? }` — each side rates once. |
+| POST | `/bookings/:id/tip` | rider | `{ amount, method }` — cash is recorded, mobile money is credited to the provider. |
+| GET | `/bookings/:id/receipt` | participant | Fare, discount, tip and total. |
+| POST | `/bookings/:id/share` | participant | Returns a public tracking URL. |
+| POST | `/bookings/:id/sos` | participant | `{ lat?, lng?, message? }` — alerts staff and trusted contacts. |
+| GET | `/bookings/:id/messages` | participant | In-trip chat history. |
 
----
+Booking states: `scheduled → searching → assigned → arrived → in_progress → completed`, or `cancelled`.
 
-## Users
+## Wallet (fleet)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/users/me` | Profil complet de l'utilisateur |
-| PATCH | `/users/me` | Modifier nom / fcm_token |
-| PATCH | `/users/driver/status` | Passer en ligne/hors ligne |
-| POST | `/users/location` | Mettre à jour la position GPS |
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/wallet` | Balance, lock state, last 20 entries. |
+| GET | `/wallet/entries?page=` | Full ledger. |
+| POST | `/wallet/top-up` | `{ amount, provider, phone? }`. Settles instantly outside production; otherwise waits for the webhook. |
+| GET | `/wallet/top-up/:reference` | Poll a pending top-up. |
+| POST | `/wallet/webhooks/:provider` | Operator callback. Requires `X-Webhook-Secret`. Body `{ reference, amount, status: "SUCCESS" }`. Idempotent. |
 
----
+## Engagement
 
-## Trips (Taxi)
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/promos` | Codes the user can use now (personal + public). |
+| POST | `/promos/check` | `{ code, service?, fare? }` |
+| GET | `/notifications` | Inbox + unread count. |
+| POST | `/notifications/read` | `{ ids? }` — omit to mark everything read. |
+| GET | `/help/thread` | Open (or create) the user's help-desk conversation. |
+| POST | `/safety/sos` | SOS without an active booking. |
+| GET | `/public/catalog` | Vehicle classes, sizes, payment methods (no auth). |
+| GET | `/public/track/:token` | Live view of a shared trip (no auth). |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/trips/estimate` | Estimer tarif et durée |
-| POST | `/trips` | Créer une demande de course |
-| POST | `/trips/:id/accept` | Accepter une course (driver) |
-| POST | `/trips/:id/pickup` | Confirmer arrivée (driver) |
-| POST | `/trips/:id/start` | Démarrer la course (driver) |
-| POST | `/trips/:id/complete` | Terminer la course (driver) |
-| POST | `/trips/:id/cancel` | Annuler (client ou driver) |
-| POST | `/trips/:id/rate` | Noter la course |
-| GET | `/trips/history` | Historique des courses |
+## Console — `/console` (staff tokens)
 
-### Create Trip
-```json
-POST /trips
-{
-  "pickup_address": "Avenue Lumumba, Lubumbashi",
-  "pickup_lat": -11.6609,
-  "pickup_lng": 27.4794,
-  "dropoff_address": "Marché central",
-  "dropoff_lat": -11.6700,
-  "dropoff_lng": 27.4900,
-  "payment_method": "cash"  // cash | mpesa | airtel_money | orange_money
-}
-```
+`POST /console/auth/login`, `POST /console/auth/request-access`, `GET /console/auth/me`, then:
+`GET /overview`, `GET /live`, `GET /people`, `GET /people/:id`, `PATCH /people/:id/status`,
+`PATCH /people/:id/verify`, `POST /people/:id/wallet` (owner), `GET /bookings`, `GET /bookings/:id`,
+`POST /bookings/:id/cancel`, `GET /wallets`, `PATCH /wallets/:userId/lock`, `GET /ledger`, `GET /finance`,
+`GET /fares`, `PATCH /fares/:id` (owner), `GET|POST /promos`, `PATCH /promos/:id` (owner), `GET /sos`,
+`PATCH /sos/:id`, `GET|POST /help/threads`, `GET /help/threads/:id`, `POST /help/threads/:id/reply`,
+`PATCH /help/threads/:id`, `GET /team`, `PATCH|DELETE /team/:id` (owner).
 
----
+## Real-time events (Socket.IO)
 
-## Deliveries
+Connect to the API origin with `auth: { token }` (staff connect to the `/console` namespace).
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/deliveries/estimate` | Estimer tarif livraison |
-| POST | `/deliveries` | Créer demande de livraison |
-| POST | `/deliveries/:id/accept` | Accepter (delivery agent) |
-| POST | `/deliveries/:id/pickup` | Colis récupéré |
-| POST | `/deliveries/:id/complete` | Livraison effectuée |
-| POST | `/deliveries/:id/cancel` | Annuler |
-| GET | `/deliveries/history` | Historique livraisons |
+**Client → server:** `fleet:position {lat,lng,heading,speed}`, `fleet:availability {availability}`,
+`chat:send {bookingId, body}`, `help:send {threadId, body}`; staff: `help:reply {threadId, body}`.
 
----
+**Server → riders:** `booking:bid`, `booking:bid_withdrawn`, `booking:assigned`, `booking:arrived`,
+`booking:started`, `booking:completed`, `booking:cancelled`, `booking:released`, `provider:position`.
 
-## Wallet
+**Server → fleet:** `booking:new`, `booking:closed`, `booking:won`, `booking:lost`, `booking:cancelled`,
+`wallet:locked`, `wallet:updated`, `tip:received`.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/wallet` | Solde et infos wallet |
-| GET | `/wallet/transactions` | Historique transactions |
-| POST | `/wallet/recharge` | Recharger via Mobile Money |
-| POST | `/wallet/webhook/:provider` | Webhook confirmation paiement (en-tête `X-Webhook-Secret` requis) |
+**Everyone:** `notification`, `chat:message`, `help:message`, `account:suspended`.
 
-### Recharge
-```json
-POST /wallet/recharge
-{
-  "amount": 5.00,
-  "provider": "mpesa",
-  "phone": "+243812345678",
-  "transaction_ref": "MPE123456"
-}
-```
-
----
-
-## WebSocket Events
-
-### Client → Server
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `location_update` | `{latitude, longitude, heading, speed}` | Mise à jour GPS |
-| `set_status` | `{status: 'online'/'offline'}` | Changer statut |
-| `track_driver` | `{driverId}` | Suivre un chauffeur |
-| `message` | `{to, text, tripId}` | Message (futur) |
-
-### Server → Client
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `new_trip_request` | Trip details | Nouvelle course broadcast |
-| `trip_accepted` | `{tripId, driver}` | Course acceptée |
-| `driver_arrived` | `{tripId}` | Chauffeur arrivé |
-| `trip_started` | `{tripId}` | Course démarrée |
-| `trip_completed` | `{tripId, fare}` | Course terminée |
-| `trip_cancelled` | `{tripId, reason}` | Course annulée |
-| `driver_location_update` | `{driverId, lat, lng}` | Position GPS temps réel |
-| `new_delivery_request` | Delivery details | Nouvelle livraison |
-| `delivery_accepted` | `{deliveryId, agent}` | Livraison acceptée |
-| `delivery_completed` | `{deliveryId, fare}` | Livraison terminée |
-
----
-
-## Payment Flow
-
-### Cash payment
-1. Client commande → `payment_method: "cash"`
-2. Course terminée → commission auto-débitée du wallet driver
-3. Si wallet < debt_limit (-5$) → compte bloqué
-4. Driver recharge via `/wallet/recharge`
-
-### Mobile Money payment
-1. Client commande → `payment_method: "mpesa"` (ou autre)
-2. Client paie via son app Mobile Money vers numéro Transur
-3. Webhook `/wallet/webhook/mpesa` confirme le paiement
-4. Gains crédités au wallet du driver (après déduction commission)
-
----
-
-## Error Codes
-
-| Code | Description |
-|------|-------------|
-| 400 | Données invalides |
-| 401 | Token manquant ou invalide |
-| 403 | Accès refusé / wallet bloqué |
-| 409 | Conflit (course déjà prise) |
-| 500 | Erreur serveur |
-
-### Wallet blocked
-```json
-{ "error": "Wallet bloqué. Rechargez votre compte.", "code": "WALLET_BLOCKED" }
-```
+**Staff:** `booking:created`, `fleet:position`, `fleet:availability`, `sos:new`, `sos:updated`,
+`help:message`, `team:request`.

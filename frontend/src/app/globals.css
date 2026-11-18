@@ -1,277 +1,129 @@
-/* Leaflet — must come before @tailwind */
 @import 'leaflet/dist/leaflet.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Design tokens ─────────────────────────────────────────────────────────── */
-:root {
-  --blue:        #007DC5;
-  --blue-light:  #EBF5FB;
-  --red:         #CE1126;
-  --red-light:   #FDECEE;
-  --gold:        #F7D618;
-  --black:       #111111;
-  --bg:          #FFFFFF;
-  --surface:     #F6F6F6;
-  --surface-2:   #EEEEEE;
-  --border:      #E8E8E8;
-  --text:        #111111;
-  --text-2:      #6B7280;
-  --text-3:      #9CA3AF;
-  --radius:      12px;
-  --radius-lg:   20px;
-  --safe-b:      env(safe-area-inset-bottom, 0px);
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  html,
+  body {
+    @apply bg-canvas text-ink antialiased;
+    overscroll-behavior-y: none;
+  }
+  /* 16px inputs stop iOS from zooming in on focus */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
-/* ── Base ──────────────────────────────────────────────────────────────────── */
-* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+@layer components {
+  .phone-frame {
+    @apply relative mx-auto min-h-[100dvh] w-full max-w-md bg-canvas;
+  }
+  .surface {
+    @apply rounded-2xl border border-line bg-white;
+  }
+  .tap {
+    @apply transition-transform duration-100 active:scale-[.97];
+  }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
-  background: var(--surface);
-  color: var(--text);
-  overscroll-behavior: none;
-  -webkit-font-smoothing: antialiased;
+  .btn {
+    @apply tap inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-brand {
+    @apply btn bg-brand-500 text-white shadow-[0_8px_20px_-8px_rgba(91,61,245,.7)] hover:bg-brand-600;
+  }
+  .btn-ink {
+    @apply btn bg-ink text-white hover:bg-ink-soft;
+  }
+  .btn-ghost {
+    @apply btn border border-line bg-white text-ink hover:bg-canvas;
+  }
+  .btn-danger {
+    @apply btn bg-red-500 text-white hover:bg-red-600;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-transparent bg-canvas px-4 py-3.5 font-medium text-ink outline-none transition placeholder:font-normal placeholder:text-ink-faint focus:border-brand-400 focus:bg-white;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted;
+  }
+
+  .chip {
+    @apply tap inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-semibold;
+  }
+  .chip-on {
+    @apply chip border-ink bg-ink text-white;
+  }
+  .chip-off {
+    @apply chip border-line bg-white text-ink-soft;
+  }
+
+  .sheet {
+    @apply fixed bottom-0 left-1/2 z-[1000] w-full max-w-md -translate-x-1/2 rounded-t-[28px] bg-white shadow-float;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .grabber {
+    @apply mx-auto mb-1 mt-3 h-1 w-10 rounded-full bg-line;
+  }
 }
 
-input, select, textarea { font-size: 16px; } /* prevent iOS zoom */
+@layer utilities {
+  .pb-nav {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+  .animate-rise {
+    animation: rise 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  }
+  .animate-radar {
+    animation: radar 1.8s ease-out infinite;
+  }
+  .skeleton {
+    background: linear-gradient(90deg, #ecebf3 25%, #f6f5fa 50%, #ecebf3 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+    @apply rounded-lg;
+  }
+}
 
-/* ── Safe area ─────────────────────────────────────────────────────────────── */
-.pb-safe { padding-bottom: max(1rem, var(--safe-b)); }
-
-/* ── Animations ────────────────────────────────────────────────────────────── */
-@keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
+@keyframes rise {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
 }
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes pulseRing {
-  0%   { transform: scale(1);   opacity: .6; }
-  80%  { transform: scale(1.5); opacity: 0; }
-  100% { transform: scale(1.5); opacity: 0; }
-}
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50%       { transform: translateY(-5px); }
+@keyframes radar {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
 }
 @keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position:  200% 0; }
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.slide-up   { animation: slideUp 0.3s cubic-bezier(.34,1.4,.64,1) both; }
-.fade-in    { animation: fadeIn .25s ease both; }
-.float-anim { animation: float 3s ease-in-out infinite; }
-.ping-slow  { animation: pulseRing 1.8s ease-out infinite; }
-
-/* ── Skeleton ──────────────────────────────────────────────────────────────── */
-.skeleton {
-  background: linear-gradient(90deg, #e9e9e9 25%, #f5f5f5 50%, #e9e9e9 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 8px;
+  to {
+    background-position: -200% 0;
+  }
 }
 
-/* ── Card ──────────────────────────────────────────────────────────────────── */
-.card {
-  background: #fff;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
+/* Leaflet tweaks */
+.leaflet-container {
+  font-family: inherit;
+  background: #e9e7f1;
 }
-.card-hover { transition: transform .15s, box-shadow .15s; }
-.card-hover:active { transform: scale(.975); }
-
-/* ── Page header (Uber-style clean top bar) ────────────────────────────────── */
-.page-header {
-  background: #fff;
-  padding: 56px 20px 20px;
-  border-bottom: 1px solid var(--border);
-}
-
-/* ── Accent bar on top (replaces gradient header) ─────────────────────────── */
-.accent-blue  { border-top: 3px solid var(--blue); }
-.accent-red   { border-top: 3px solid var(--red); }
-.accent-gold  { border-top: 3px solid var(--gold); }
-.accent-black { border-top: 3px solid var(--black); }
-
-/* ── Hero headers (used only on auth/splash screens) ──────────────────────── */
-.header-blue {
-  background: var(--blue);
-}
-.header-red {
-  background: var(--red);
-}
-.header-dark {
-  background: var(--black);
-}
-
-/* ── Buttons ───────────────────────────────────────────────────────────────── */
-.btn-primary {
-  width: 100%;
-  padding: 15px 20px;
-  background: var(--blue);
-  color: #fff;
-  border-radius: var(--radius);
-  font-weight: 700;
-  font-size: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: opacity .15s, transform .15s;
+.tsp-marker {
+  background: none;
   border: none;
-  cursor: pointer;
-  letter-spacing: .01em;
-}
-.btn-primary:active  { opacity: .85; transform: scale(.98); }
-.btn-primary:disabled { opacity: .45; cursor: not-allowed; }
-
-.btn-red {
-  background: var(--red);
-}
-
-.btn-black {
-  background: var(--black);
-}
-
-.btn-outline {
-  width: 100%;
-  padding: 15px 20px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius);
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--text);
-  background: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: background .15s;
-  cursor: pointer;
-}
-.btn-outline:active { background: var(--surface); }
-
-/* ── Input ─────────────────────────────────────────────────────────────────── */
-.input-field {
-  width: 100%;
-  padding: 14px 16px;
-  background: var(--surface);
-  border: 1.5px solid transparent;
-  border-radius: var(--radius);
-  font-size: 15px;
-  font-weight: 500;
-  outline: none;
-  color: var(--text);
-  transition: border-color .2s, background .2s;
-}
-.input-field::placeholder { color: var(--text-3); font-weight: 400; }
-.input-field:focus {
-  border-color: var(--blue);
-  background: #fff;
-}
-
-/* ── Bottom nav ────────────────────────────────────────────────────────────── */
-.bottom-nav {
-  background: #fff;
-  border-top: 1px solid var(--border);
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 28rem;
-  z-index: 200;
-  padding-bottom: max(8px, var(--safe-b));
-}
-
-/* ── Badge / pill ──────────────────────────────────────────────────────────── */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 10px;
-  border-radius: 100px;
-  font-size: 11px;
-  font-weight: 600;
-}
-.badge-blue  { background: var(--blue-light);  color: var(--blue); }
-.badge-red   { background: var(--red-light);   color: var(--red); }
-.badge-green { background: #ECFDF5; color: #059669; }
-.badge-gray  { background: var(--surface); color: var(--text-2); }
-
-/* ── Online toggle button ──────────────────────────────────────────────────── */
-.toggle-btn {
-  width: 140px; height: 140px;
-  border-radius: 50%;
-  font-weight: 800;
-  font-size: 13px;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  border: none;
-  cursor: pointer;
-  transition: transform .15s, box-shadow .2s;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-}
-.toggle-btn:active { transform: scale(.94); }
-.toggle-btn.online {
-  background: var(--blue);
-  color: #fff;
-  box-shadow: 0 8px 30px rgba(0,125,197,.35);
-}
-.toggle-btn.online-red {
-  background: var(--red);
-  color: #fff;
-  box-shadow: 0 8px 30px rgba(206,17,38,.35);
-}
-.toggle-btn.offline {
-  background: #E5E7EB;
-  color: #6B7280;
-  box-shadow: 0 4px 12px rgba(0,0,0,.08);
-}
-
-/* ── Stat card ─────────────────────────────────────────────────────────────── */
-.stat-card {
-  background: #fff;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  padding: 16px;
-}
-
-/* ── Trip/Delivery request card ────────────────────────────────────────────── */
-.request-card-blue { border: 2px solid var(--blue); }
-.request-card-red  { border: 2px solid var(--red); }
-
-/* ── Location input row ────────────────────────────────────────────────────── */
-.loc-input-wrap {
-  background: var(--surface);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  transition: background .15s;
-}
-.loc-input-wrap:focus-within {
-  background: #fff;
-  outline: 2px solid var(--blue);
-}
-
-/* ── Map overlay sheet handle ──────────────────────────────────────────────── */
-.sheet-handle {
-  width: 36px; height: 4px;
-  background: var(--border);
-  border-radius: 2px;
-  margin: 10px auto 4px;
-}
-
-/* ── Wave divider (auth pages only) ────────────────────────────────────────── */
-.wave-bottom {
-  position: absolute; bottom: -1px; left: 0; right: 0; height: 28px;
 }

@@ -1,33 +1,41 @@
 import { io } from 'socket.io-client';
+import { appSession, consoleSession } from './session';
 
-let socket = null;
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
 
-export const getSocket = () => {
-  if (!socket || !socket.connected) {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('transur_token') : null;
-    if (!token) return null;
+const sockets = { app: null, console: null };
 
-    socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5001', {
-      auth: { token },
-      transports: ['websocket', 'polling'], // websocket first, fallback to polling
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
-      timeout: 10000,
-    });
+const connect = (kind, path, session) => {
+  const existing = sockets[kind];
+  if (existing) return existing;
+  const token = session.token();
+  if (!token) return null;
 
-    socket.on('connect', () => console.log('🔌 Socket connecté'));
-    socket.on('disconnect', (reason) => console.log('❌ Socket déconnecté:', reason));
-    socket.on('connect_error', (err) => console.warn('Socket erreur:', err.message));
-  }
+  const socket = io(`${SOCKET_URL}${path}`, {
+    auth: { token },
+    // WebSocket first, long-polling when a proxy or weak network blocks it.
+    transports: ['websocket', 'polling'],
+    // Keep retrying forever with growing gaps (up to 30 s) — rural networks
+    // can be down for minutes at a time.
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1500,
+    reconnectionDelayMax: 30000,
+    timeout: 15000,
+  });
+  sockets[kind] = socket;
   return socket;
 };
 
-export const disconnectSocket = () => {
-  if (socket) {
-    socket.disconnect();
-    socket = null;
-  }
-};
+/** Shared socket for riders, drivers and couriers. */
+export const appSocket = () => connect('app', '', appSession);
 
-export default { getSocket, disconnectSocket };
+/** Shared socket for the staff console. */
+export const consoleSocket = () => connect('console', '/console', consoleSession);
+
+export const closeSockets = () => {
+  Object.keys(sockets).forEach((k) => {
+    sockets[k]?.disconnect();
+    sockets[k] = null;
+  });
+};

@@ -1,39 +1,34 @@
 import './globals.css';
+import { Plus_Jakarta_Sans } from 'next/font/google';
 import { Toaster } from 'react-hot-toast';
 
+const sans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
+
 export const metadata = {
-  title: 'Transur — Taxi & Livraison à Lubumbashi',
-  description: 'Commandez un taxi ou faites livrer vos colis facilement à Lubumbashi, RDC.',
+  title: { default: 'Transur — Rides & Deliveries', template: '%s · Transur' },
+  description: 'Book a ride or send a parcel in seconds. Name your price, pick your driver, track every metre.',
   manifest: '/manifest.json',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Transur' },
+  icons: { icon: '/icons/icon.svg', apple: '/icons/icon.svg' },
+  appleWebApp: { capable: true, title: 'Transur', statusBarStyle: 'default' },
 };
 
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-  userScalable: false,
-  themeColor: '#007DC5',
+  themeColor: '#5B3DF5',
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="fr">
-      <head>
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      </head>
-      <body className="max-w-md mx-auto min-h-screen bg-white relative overflow-x-hidden">
+    <html lang="en" className={sans.variable}>
+      <body className="font-sans">
         {children}
         <Toaster
           position="top-center"
           toastOptions={{
             duration: 3500,
-            style: { background: '#1f2937', color: '#fff', fontSize: '14px', borderRadius: '12px' },
+            style: { background: '#0E0E1A', color: '#fff', borderRadius: '14px', fontSize: '14px', fontWeight: 500 },
           }}
         />
       </body>

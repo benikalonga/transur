@@ -1,26 +1,59 @@
-# Environment — never commit these
+# Secrets
 .env
-.env.local
-.env.production
-.env.production.local
+.env.*
 !.env.example
-*.env
+*.pem
 
-# Node
+# Dependencies & builds
 node_modules/
-npm-debug.log*
-
-# Next.js
 frontend/.next/
 frontend/out/
+*.tsbuildinfo
 
-# Uploads
+# Runtime data
+uploads/
 backend/uploads/
+backups/
+nginx/certs/
+nginx/certs-le/
+nginx/acme/
 
-# Logs
-logs/
+# Logs & OS noise
 *.log
-
-# OS
+npm-debug.log*
 .DS_Store
 Thumbs.db
+
+# Dependencies and builds
+.next/
+out/
+dist/
+build/
+coverage/
+next-env.d.ts
+.expo/
+mobile/ios/
+mobile/android/
+
+# Secrets and local settings
+*.key
+*.p12
+*.keystore
+
+# Local data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.zip
+
+# Logs, caches and system files
+.cache/
+tmp/
+.idea/
+.vscode/
+
+# AI assistant files
+.claude/
+CLAUDE.md

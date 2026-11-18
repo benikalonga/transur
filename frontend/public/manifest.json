@@ -1,17 +1,16 @@
 {
-  "name": "Transur — Taxi & Livraison",
+  "name": "Transur — Rides & Deliveries",
   "short_name": "Transur",
-  "description": "Taxi et livraison à Lubumbashi, RDC",
+  "description": "Book a ride or send a parcel in seconds, and name your own price.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#007DC5",
+  "background_color": "#0E0E1A",
+  "theme_color": "#5B3DF5",
   "orientation": "portrait",
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ],
-  "categories": ["travel", "transportation"],
-  "lang": "fr",
+  "categories": ["travel", "transportation", "navigation"],
+  "lang": "en",
   "dir": "ltr"
 }

@@ -1,31 +1,39 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./src/**/*.{js,jsx,ts,tsx}'],
+  content: ['./src/**/*.{js,jsx}'],
   theme: {
     extend: {
       colors: {
-        // 🇨🇩 Drapeau RDC — Bleu, Rouge, Blanc
-        primary: {
-          50:  '#e6f2fa',
-          100: '#c0dff3',
-          200: '#8fc4e8',
-          300: '#5aaada',
-          400: '#2d93ce',
-          500: '#007DC5',  // Bleu DRC (ciel)
-          600: '#006aaa',
-          700: '#00538c',
-          800: '#003d6e',
-          900: '#002850',
+        brand: {
+          50: '#F1EEFF',
+          100: '#E3DDFF',
+          200: '#C7BBFF',
+          300: '#A592FF',
+          400: '#7F66FA',
+          500: '#5B3DF5',
+          600: '#4A2BE0',
+          700: '#3B20B8',
+          800: '#2D1A8C',
+          900: '#1E1260',
         },
-        congo: {
-          blue:   '#007DC5',  // Bleu ciel du drapeau
-          red:    '#CE1126',  // Rouge du drapeau
-          yellow: '#F7D618',  // Jaune/or de l'étoile
+        volt: '#FFB020',
+        ink: {
+          DEFAULT: '#0E0E1A',
+          soft: '#2A2A3C',
+          muted: '#6B6B80',
+          faint: '#A3A3B5',
         },
-        dark: '#0d1b2a',  // Bleu nuit profond
+        canvas: '#F6F5FA',
+        line: '#E7E5EF',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
+      },
+      borderRadius: {
+        xl2: '1.25rem',
+      },
+      boxShadow: {
+        float: '0 10px 30px -10px rgba(14,14,26,.25)',
       },
     },
   },

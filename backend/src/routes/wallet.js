@@ -1,81 +1,73 @@
 const express = require('express');
-const router  = express.Router();
-const crypto  = require('crypto');
-const { v4: uuidv4 } = require('uuid');
-const { query, pool } = require('../config/database');
-const { authenticate, requireRole } = require('../middleware/auth');
-const { rechargeWallet, getWallet } = require('../services/walletService');
+const crypto = require('crypto');
+const { randomUUID: uuid } = require('crypto');
+const env = require('../config/env');
+const { sql, one } = require('../db/pool');
+const { handle, badRequest, unauthorized, paging } = require('../lib/http');
+const { toAmount } = require('../lib/money');
+const { requireUser, onlyRoles } = require('../middleware/auth');
+const { FLEET_ROLES, MOBILE_MONEY } = require('../config/catalog');
+const wallet = require('../services/wallet');
+const bookings = require('../services/bookings');
 
-// ─── GET /api/wallet ──────────────────────────────────────────────────────────
-router.get('/', authenticate, requireRole('driver', 'delivery'), async (req, res, next) => {
-  try {
-    const wallet = await getWallet(req.user.id);
-    if (!wallet) return res.status(404).json({ error: 'Wallet introuvable' });
-    res.json({ wallet });
-  } catch (err) { next(err); }
-});
+const router = express.Router();
 
-// ─── GET /api/wallet/transactions ─────────────────────────────────────────────
-router.get('/transactions', authenticate, requireRole('driver', 'delivery'), async (req, res, next) => {
-  try {
-    const { page = 1, limit = 30 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
-    const { rows } = await query(
-      `SELECT * FROM wallet_transactions WHERE user_id=? ORDER BY created_at DESC LIMIT ${parseInt(limit)} OFFSET ${offset}`,
-      [req.user.id]
-    );
-    res.json({ transactions: rows, page: parseInt(page) });
-  } catch (err) { next(err); }
-});
+const fleet = [requireUser, onlyRoles(...FLEET_ROLES)];
 
-// ─── POST /api/wallet/recharge ────────────────────────────────────────────────
-router.post('/recharge', authenticate, requireRole('driver', 'delivery'), async (req, res, next) => {
-  try {
-    const { amount, provider, phone, transaction_ref } = req.body;
-    if (!amount || parseFloat(amount) <= 0) return res.status(400).json({ error: 'Montant invalide' });
-    if (!provider) return res.status(400).json({ error: 'Fournisseur requis' });
+// GET /api/wallet — balance, lock state and the last 20 entries
+router.get('/', fleet, handle(async (req, res) => {
+  res.json({ wallet: await wallet.summary(req.user.id) });
+}));
 
-    // Une référence opérateur ne peut être réclamée qu'une seule fois
-    if (transaction_ref) {
-      const { rows: existing } = await query(
-        'SELECT id FROM mobile_money_transactions WHERE provider_ref = ?', [transaction_ref]
-      );
-      if (existing[0]) return res.status(409).json({ error: 'Référence déjà utilisée' });
-    }
+// GET /api/wallet/entries — full ledger, paginated
+router.get('/entries', fleet, handle(async (req, res) => {
+  const { limit, offset, page } = paging(req.query, 30);
+  const entries = await sql(
+    `SELECT * FROM wallet_entries WHERE user_id = ? ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
+    [req.user.id]
+  );
+  res.json({ entries, page });
+}));
 
-    // Enregistre la demande de recharge
-    const txId = uuidv4();
-    const ref  = transaction_ref || `TRX-${uuidv4()}`;
-    await query(
-      `INSERT INTO mobile_money_transactions
-         (id, user_id, provider, phone_number, amount, direction, status, provider_ref, reference_type)
-       VALUES (?, ?, ?, ?, ?, 'inbound', 'pending', ?, 'recharge')`,
-      [txId, req.user.id, provider, phone || '', parseFloat(amount), ref]
-    );
+// POST /api/wallet/top-up — start a mobile money top-up
+router.post('/top-up', fleet, handle(async (req, res) => {
+  const amount = toAmount(req.body.amount);
+  const provider = req.body.provider;
+  if (!(amount >= 0.5 && amount <= 1000)) throw badRequest('Top-ups must be between 0.50 and 1000.');
+  if (!MOBILE_MONEY.includes(provider)) throw badRequest('Choose a mobile money provider.');
 
-    // En dev uniquement → confirmation immédiate (pas de webhook réel)
-    if (process.env.NODE_ENV === 'development') {
-      await rechargeWallet(req.user.id, parseFloat(amount), ref, `Recharge via ${provider}`);
-      await query(
-        "UPDATE mobile_money_transactions SET status='completed', completed_at=NOW() WHERE id=?", [txId]
-      );
-      const wallet = await getWallet(req.user.id);
-      return res.json({ message: 'Wallet rechargé avec succès', wallet });
-    }
+  const id = uuid();
+  const reference = `TOP-${id.slice(0, 13).toUpperCase()}`;
+  await sql(
+    `INSERT INTO payment_intents (id, user_id, purpose, provider, payer_phone, amount, provider_ref)
+     VALUES (?, ?, 'wallet_top_up', ?, ?, ?, ?)`,
+    [id, req.user.id, provider, req.body.phone || req.user.phone, amount, reference]
+  );
 
-    // En production → attendre webhook
-    res.json({
-      message: 'Demande enregistrée. Envoyez le paiement puis confirmez avec la référence.',
-      ref,
-    });
-  } catch (err) { next(err); }
-});
+  // Outside production there is no real provider: settle straight away.
+  if (!env.isProd) {
+    await bookings.settleIntent(reference, amount);
+    return res.json({ status: 'succeeded', reference, wallet: await wallet.summary(req.user.id) });
+  }
+  res.status(202).json({
+    status: 'pending',
+    reference,
+    instructions: `Approve the ${amount.toFixed(2)} payment prompt on ${req.body.phone || req.user.phone}. Your wallet updates automatically.`,
+  });
+}));
 
-// ─── POST /api/wallet/webhook/:provider ───────────────────────────────────────
-// Appelé par l'opérateur Mobile Money pour confirmer un paiement entrant.
-// Doit envoyer l'en-tête X-Webhook-Secret = WALLET_WEBHOOK_SECRET.
-const isAuthorizedWebhook = (req) => {
-  const expected = process.env.WALLET_WEBHOOK_SECRET;
+// GET /api/wallet/top-up/:reference — poll a pending top-up
+router.get('/top-up/:reference', fleet, handle(async (req, res) => {
+  const intent = await one(
+    'SELECT provider_ref AS reference, amount, status, created_at, settled_at FROM payment_intents WHERE provider_ref = ? AND user_id = ?',
+    [req.params.reference, req.user.id]
+  );
+  res.json({ intent });
+}));
+
+// POST /api/wallet/webhooks/:provider — payment confirmation from the operator
+const webhookAuthorized = (req) => {
+  const expected = env.paymentWebhookSecret;
   const received = req.get('x-webhook-secret');
   if (!expected || !received) return false;
   const a = Buffer.from(received);
@@ -83,38 +75,20 @@ const isAuthorizedWebhook = (req) => {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 };
 
-router.post('/webhook/:provider', async (req, res, next) => {
-  try {
-    if (!isAuthorizedWebhook(req)) return res.status(401).json({ error: 'Non autorisé' });
+router.post('/webhooks/:provider', handle(async (req, res) => {
+  if (!webhookAuthorized(req)) throw unauthorized('Invalid webhook signature');
+  const { reference, amount, status } = req.body;
+  if (!reference) throw badRequest('reference is required');
 
-    const { transaction_id, amount, status } = req.body;
-    if (status !== 'SUCCESS' || !transaction_id) return res.json({ received: true });
+  const intent = await one('SELECT provider FROM payment_intents WHERE provider_ref = ?', [reference]);
+  if (!intent || intent.provider !== req.params.provider) return res.json({ received: true });
 
-    const { rows } = await query(
-      "SELECT * FROM mobile_money_transactions WHERE provider_ref=? AND provider=? AND status='pending'",
-      [transaction_id, req.params.provider]
-    );
-    if (!rows[0]) return res.json({ received: true });
-
-    // Le montant payé doit correspondre au montant demandé
-    if (Math.abs(parseFloat(amount) - parseFloat(rows[0].amount)) > 0.001) {
-      await query(
-        "UPDATE mobile_money_transactions SET status='failed' WHERE id=? AND status='pending'", [rows[0].id]
-      );
-      return res.status(400).json({ error: 'Montant incorrect' });
-    }
-
-    // Marque la transaction comme complétée de façon atomique (évite un double crédit)
-    const [result] = await pool.execute(
-      "UPDATE mobile_money_transactions SET status='completed', completed_at=NOW() WHERE id=? AND status='pending'",
-      [rows[0].id]
-    );
-    if (result.affectedRows !== 1) return res.json({ received: true });
-
-    await rechargeWallet(rows[0].user_id, parseFloat(rows[0].amount), transaction_id,
-      `Recharge confirmée — ${req.params.provider}`);
-    res.json({ received: true, processed: true });
-  } catch (err) { next(err); }
-});
+  if (status !== 'SUCCESS') {
+    await sql("UPDATE payment_intents SET status = 'failed', settled_at = UTC_TIMESTAMP() WHERE provider_ref = ? AND status = 'pending'", [reference]);
+    return res.json({ received: true });
+  }
+  const result = await bookings.settleIntent(reference, parseFloat(amount));
+  res.json({ received: true, ...result });
+}));
 
 module.exports = router;

@@ -1,95 +1,155 @@
 import axios from 'axios';
+import { appSession, consoleSession } from './session';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+export const ASSET_URL = API_URL.replace(/\/api\/?$/, '');
 
-const api = axios.create({
-  baseURL: API_URL,
-  timeout: 15000, // 15s timeout for slow connections
-  headers: { 'Content-Type': 'application/json' },
-});
-
-// Attach JWT token automatically
-api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('transur_token');
+const client = (session, loginPath) => {
+  const http = axios.create({ baseURL: API_URL, timeout: 20000 }); // patient on slow networks
+  http.interceptors.request.use((config) => {
+    const token = session.token();
     if (token) config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Handle 401 globally
-api.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401 && typeof window !== 'undefined') {
-      localStorage.removeItem('transur_token');
-      localStorage.removeItem('transur_user');
-      window.location.href = '/auth/login';
+    return config;
+  });
+  http.interceptors.response.use(
+    (res) => res.data,
+    (err) => {
+      if (err.response?.status === 401 && typeof window !== 'undefined' && session.token()) {
+        session.clear();
+        window.location.href = loginPath;
+      }
+      const message =
+        err.response?.data?.error ||
+        (err.code === 'ECONNABORTED' ? 'The network is slow. Please try again.' : null) ||
+        (!err.response ? 'You appear to be offline.' : 'Something went wrong.');
+      return Promise.reject(Object.assign(new Error(message), { status: err.response?.status, data: err.response?.data }));
     }
-    return Promise.reject(err);
-  }
-);
+  );
+  return http;
+};
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
-export const sendOTP = (phone, purpose = 'login') =>
-  api.post('/auth/send-otp', { phone, purpose });
+const http = client(appSession, '/login');
+const staffHttp = client(consoleSession, '/console/login');
 
-export const verifyOTP = (phone, code, purpose = 'login') =>
-  api.post('/auth/verify-otp', { phone, code, purpose });
+/** Turn a stored avatar path into a full URL. */
+export const assetUrl = (path) => (!path ? null : path.startsWith('http') ? path : `${ASSET_URL}${path}`);
 
-export const registerClient = (data) => api.post('/auth/register/client', data);
+const form = (data) => {
+  const fd = new FormData();
+  Object.entries(data).forEach(([k, v]) => v != null && v !== '' && fd.append(k, v));
+  return fd;
+};
 
-export const registerDriver = (formData) =>
-  api.post('/auth/register/driver', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+// ─── App (rider / driver / courier) ───────────────────────────────────────────
 
-export const registerDelivery = (formData) =>
-  api.post('/auth/register/delivery', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+export const api = {
+  auth: {
+    requestCode: (phone) => http.post('/auth/code', { phone }),
+    verify: (phone, code) => http.post('/auth/verify', { phone, code }),
+    signup: (data) => http.post('/auth/signup', form(data)),
+  },
+  catalog: () => http.get('/public/catalog'),
+  track: (token) => http.get(`/public/track/${token}`),
 
-// ── Users ─────────────────────────────────────────────────────────────────────
-export const getMe = () => api.get('/users/me');
-export const updateProfile = (data) => api.patch('/users/me', data);
-export const setDriverStatus = (status) => api.patch('/users/driver/status', { status });
-export const updateLocation = (location) => api.post('/users/location', location);
+  me: {
+    get: () => http.get('/me'),
+    update: (data) => http.patch('/me', data.avatar ? form(data) : data),
+    updateVehicle: (data) => http.patch('/me/vehicle', data),
+    setAvailability: (availability, position) => http.patch('/me/availability', { availability, position }),
+    postPosition: (pos) => http.post('/me/position', pos),
+    openRequests: () => http.get('/me/requests'),
+    earnings: () => http.get('/me/earnings'),
+    referrals: () => http.get('/me/referrals'),
+    places: () => http.get('/me/places'),
+    addPlace: (place) => http.post('/me/places', place),
+    removePlace: (id) => http.delete(`/me/places/${id}`),
+    contacts: () => http.get('/me/contacts'),
+    addContact: (c) => http.post('/me/contacts', c),
+    removeContact: (id) => http.delete(`/me/contacts/${id}`),
+  },
 
-// ── Trips ─────────────────────────────────────────────────────────────────────
-export const estimateTrip = (data) => api.post('/trips/estimate', data);
-export const requestTrip = (data) => api.post('/trips', data);
-export const acceptTrip = (id) => api.post(`/trips/${id}/accept`);
-export const confirmPickup = (id) => api.post(`/trips/${id}/pickup`);
-export const startTrip = (id) => api.post(`/trips/${id}/start`);
-export const completeTrip = (id, data) => api.post(`/trips/${id}/complete`, data);
-export const cancelTrip = (id, reason) => api.post(`/trips/${id}/cancel`, { reason });
-export const rateTrip = (id, data) => api.post(`/trips/${id}/rate`, data);
-export const getTrip = (id) => api.get(`/trips/${id}`);
-export const getTripHistory = (page = 1) => api.get(`/trips/history?page=${page}`);
-// Negotiation (InDrive-style)
-export const submitTripOffer  = (id, offered_price) => api.post(`/trips/${id}/offer`, { offered_price });
-export const getTripOffers    = (id) => api.get(`/trips/${id}/offers`);
-export const acceptTripOffer  = (tripId, offerId)   => api.post(`/trips/${tripId}/offers/${offerId}/accept`);
+  bookings: {
+    quote: (data) => http.post('/bookings/quote', data),
+    create: (data) => http.post('/bookings', data),
+    list: (params) => http.get('/bookings', { params }),
+    current: () => http.get('/bookings/current'),
+    get: (id) => http.get(`/bookings/${id}`),
+    bids: (id) => http.get(`/bookings/${id}/bids`),
+    bid: (id, amount) => http.post(`/bookings/${id}/bids`, { amount }),
+    withdrawBid: (id) => http.delete(`/bookings/${id}/bids/mine`),
+    acceptBid: (id, bidId) => http.post(`/bookings/${id}/bids/${bidId}/accept`),
+    arrive: (id) => http.post(`/bookings/${id}/arrive`),
+    start: (id) => http.post(`/bookings/${id}/start`),
+    complete: (id, pin) => http.post(`/bookings/${id}/complete`, { pin }),
+    cancel: (id, reason) => http.post(`/bookings/${id}/cancel`, { reason }),
+    rate: (id, stars, feedback) => http.post(`/bookings/${id}/rating`, { stars, feedback }),
+    tip: (id, amount, method) => http.post(`/bookings/${id}/tip`, { amount, method }),
+    receipt: (id) => http.get(`/bookings/${id}/receipt`),
+    share: (id) => http.post(`/bookings/${id}/share`),
+    sos: (id, data) => http.post(`/bookings/${id}/sos`, data),
+    messages: (id) => http.get(`/bookings/${id}/messages`),
+  },
 
-// ── Deliveries ────────────────────────────────────────────────────────────────
-export const estimateDelivery = (data) => api.post('/deliveries/estimate', data);
-export const requestDelivery = (data) => api.post('/deliveries', data);
-export const acceptDelivery = (id) => api.post(`/deliveries/${id}/accept`);
-export const pickupDelivery = (id) => api.post(`/deliveries/${id}/pickup`);
-export const completeDelivery = (id) => api.post(`/deliveries/${id}/complete`);
-export const cancelDelivery = (id, reason) => api.post(`/deliveries/${id}/cancel`, { reason });
-export const getDeliveryHistory = (page = 1) => api.get(`/deliveries/history?page=${page}`);
-// Negotiation (InDrive-style delivery)
-export const submitDeliveryOffer  = (deliveryId, offeredPrice) => api.post(`/deliveries/${deliveryId}/offer`, { offered_price: offeredPrice });
-export const getDeliveryOffers    = (deliveryId) => api.get(`/deliveries/${deliveryId}/offers`);
-export const acceptDeliveryOffer  = (deliveryId, offerId) => api.post(`/deliveries/${deliveryId}/offers/${offerId}/accept`);
+  wallet: {
+    get: () => http.get('/wallet'),
+    entries: (page = 1) => http.get('/wallet/entries', { params: { page } }),
+    topUp: (data) => http.post('/wallet/top-up', data),
+  },
 
-// ── Wallet ────────────────────────────────────────────────────────────────────
-export const getWallet = () => api.get('/wallet');
-export const getTransactions = (page = 1) => api.get(`/wallet/transactions?page=${page}`);
-export const rechargeWallet = (data) => api.post('/wallet/recharge', data);
+  promos: {
+    mine: () => http.get('/promos'),
+    check: (code, service, fare) => http.post('/promos/check', { code, service, fare }),
+  },
+  notifications: {
+    list: () => http.get('/notifications'),
+    markRead: (ids) => http.post('/notifications/read', { ids }),
+  },
+  help: { thread: () => http.get('/help/thread') },
+  sos: (data) => http.post('/safety/sos', data),
+};
 
-// ── Chat ──────────────────────────────────────────────────────────────────────
-export const getChatHistory = (type, id) => api.get(`/chat/${type}/${id}`);
+// ─── Console (staff) ──────────────────────────────────────────────────────────
 
-export default api;
+export const consoleApi = {
+  login: (email, password) => staffHttp.post('/console/auth/login', { email, password }),
+  requestAccess: (data) => staffHttp.post('/console/auth/request-access', data),
+  me: () => staffHttp.get('/console/auth/me'),
+
+  overview: () => staffHttp.get('/console/overview'),
+  live: () => staffHttp.get('/console/live'),
+
+  people: (params) => staffHttp.get('/console/people', { params }),
+  person: (id) => staffHttp.get(`/console/people/${id}`),
+  setPersonStatus: (id, status) => staffHttp.patch(`/console/people/${id}/status`, { status }),
+  verify: (id, verified) => staffHttp.patch(`/console/people/${id}/verify`, { verified }),
+  adjustWallet: (id, amount, memo) => staffHttp.post(`/console/people/${id}/wallet`, { amount, memo }),
+
+  bookings: (params) => staffHttp.get('/console/bookings', { params }),
+  booking: (id) => staffHttp.get(`/console/bookings/${id}`),
+  cancelBooking: (id, reason) => staffHttp.post(`/console/bookings/${id}/cancel`, { reason }),
+
+  wallets: (params) => staffHttp.get('/console/wallets', { params }),
+  lockWallet: (userId, locked) => staffHttp.patch(`/console/wallets/${userId}/lock`, { locked }),
+  ledger: (params) => staffHttp.get('/console/ledger', { params }),
+  finance: (params) => staffHttp.get('/console/finance', { params }),
+
+  fares: () => staffHttp.get('/console/fares'),
+  updateFare: (id, data) => staffHttp.patch(`/console/fares/${id}`, data),
+
+  promos: (params) => staffHttp.get('/console/promos', { params }),
+  createPromo: (data) => staffHttp.post('/console/promos', data),
+  updatePromo: (id, data) => staffHttp.patch(`/console/promos/${id}`, data),
+
+  sos: (params) => staffHttp.get('/console/sos', { params }),
+  updateSos: (id, status) => staffHttp.patch(`/console/sos/${id}`, { status }),
+
+  threads: (params) => staffHttp.get('/console/help/threads', { params }),
+  thread: (id) => staffHttp.get(`/console/help/threads/${id}`),
+  startThread: (userId) => staffHttp.post('/console/help/threads', { userId }),
+  reply: (id, body) => staffHttp.post(`/console/help/threads/${id}/reply`, { body }),
+  setThreadState: (id, state) => staffHttp.patch(`/console/help/threads/${id}`, { state }),
+
+  team: () => staffHttp.get('/console/team'),
+  updateMember: (id, data) => staffHttp.patch(`/console/team/${id}`, data),
+  removeMember: (id) => staffHttp.delete(`/console/team/${id}`),
+};

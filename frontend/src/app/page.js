@@ -1,31 +1,26 @@
 'use client';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { appSession, homeFor } from '@/lib/session';
+import Logo from '@/components/Logo';
 
-export default function Home() {
+export default function Splash() {
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem('transur_token');
-    const user = localStorage.getItem('transur_user');
-
-    if (token && user) {
-      const parsed = JSON.parse(user);
-      const routes = { client: '/client', driver: '/driver', delivery: '/delivery', admin: '/admin' };
-      router.replace(routes[parsed.role] || '/auth/login');
-    } else {
-      router.replace('/auth/login');
-    }
+    const profile = appSession.profile();
+    const target = appSession.token() && profile ? homeFor(profile.role) : '/login';
+    const t = setTimeout(() => router.replace(target), 450);
+    return () => clearTimeout(t);
   }, [router]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center header-blue">
-      <div className="text-white text-center">
-        <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center font-black text-3xl mx-auto mb-4">T</div>
-        <div className="text-3xl font-black mb-1">Transur</div>
-        <div className="text-blue-100 text-sm">Taxi & Livraison · Lubumbashi</div>
-        <div className="mt-6 w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
+    <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-ink text-white">
+      <Logo size={64} light />
+      <p className="mt-4 text-sm text-white/60">Rides & deliveries, at your price.</p>
+      <div className="mt-10 h-1 w-24 overflow-hidden rounded-full bg-white/10">
+        <div className="h-full w-1/2 animate-pulse rounded-full bg-volt" />
       </div>
-    </div>
+    </main>
   );
 }
