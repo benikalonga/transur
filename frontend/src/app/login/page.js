@@ -266,7 +266,7 @@ export default function LoginPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label" htmlFor="email">Email (optional)</label>
-                <input id="email" type="email" className="field" value={form.email} onChange={set('email')} placeholder="you@example.com" />
+                <input id="email" type="email" className="field" value={form.email} onChange={set('email')} placeholder="YOUR_EMAIL@example.com" />
               </div>
               <div>
                 <label className="label" htmlFor="ref">Invite code</label>

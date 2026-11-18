@@ -166,7 +166,7 @@ cd backend
 cp .env.example .env        # set DB_* and a JWT_SECRET of 32+ characters
 npm install
 npm run db:migrate          # creates the database, all tables and default fares
-npm run staff:owner -- you@example.com 'a-strong-password' "Your Name"
+npm run staff:owner -- YOUR_EMAIL@example.com 'YOUR_PASSWORD' "YOUR_NAME"
 npm run dev                 # http://localhost:5000/api/health
 ```
 
@@ -213,7 +213,7 @@ npm run dev                 # http://localhost:3000
 cp .env.example .env               # fill in every secret and your domain
 ./deploy.sh certs                  # Let's Encrypt certificate for $DOMAIN
 ./deploy.sh up                     # MySQL + API + web + Nginx
-./deploy.sh owner you@example.com 'a-strong-password' "Your Name"
+./deploy.sh owner YOUR_EMAIL@example.com 'YOUR_PASSWORD' "YOUR_NAME"
 ./deploy.sh status                 # health check
 ./deploy.sh backup                 # gzipped mysqldump into ./backups
 ./deploy.sh update                 # pull and rebuild

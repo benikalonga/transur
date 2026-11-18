@@ -5,6 +5,9 @@ const num = (value, fallback) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+/** Template placeholders such as "YOUR_JWT_SECRET" count as not set. */
+const secret = (value) => (!value || /^YOUR_[A-Z0-9_]+$/.test(value) ? '' : value);
+
 const env = {
   port: num(process.env.PORT, 5000),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -18,14 +21,14 @@ const env = {
     password: process.env.DB_PASSWORD || '',
   },
 
-  jwtSecret: process.env.JWT_SECRET || '',
+  jwtSecret: secret(process.env.JWT_SECRET),
   jwtTtl: process.env.JWT_TTL || '7d',
   staffJwtTtl: process.env.STAFF_JWT_TTL || '12h',
   otpTtlMinutes: num(process.env.OTP_TTL_MINUTES, 10),
   otpMaxAttempts: num(process.env.OTP_MAX_ATTEMPTS, 5),
 
   sms: {
-    apiKey: process.env.SMS_API_KEY || '',
+    apiKey: secret(process.env.SMS_API_KEY),
     username: process.env.SMS_USERNAME || 'sandbox',
     senderId: process.env.SMS_SENDER_ID || 'TRANSUR',
   },
@@ -39,7 +42,7 @@ const env = {
   referralWelcome: num(process.env.REFERRAL_WELCOME_DISCOUNT, 1),
   referralReward: num(process.env.REFERRAL_REWARD_DISCOUNT, 1.5),
 
-  paymentWebhookSecret: process.env.PAYMENT_WEBHOOK_SECRET || '',
+  paymentWebhookSecret: secret(process.env.PAYMENT_WEBHOOK_SECRET),
 };
 
 env.isProd = env.nodeEnv === 'production';
@@ -49,7 +52,13 @@ env.isDev = env.nodeEnv === 'development';
 env.assertValid = () => {
   const problems = [];
   if (env.jwtSecret.length < 32) {
-    problems.push('JWT_SECRET is missing or shorter than 32 characters (openssl rand -hex 64).');
+    problems.push('JWT_SECRET is missing, still a YOUR_ placeholder, or shorter than 32 characters (openssl rand -hex 64).');
+  }
+  if (env.isProd) {
+    const placeholders = Object.entries(process.env)
+      .filter(([, value]) => /YOUR_[A-Z0-9_]+/.test(value || ''))
+      .map(([key]) => key);
+    if (placeholders.length) problems.push(`Replace the YOUR_ placeholder values in: ${placeholders.join(', ')}.`);
   }
   if (env.isProd && !process.env.APP_URL) {
     problems.push('APP_URL is required in production (allowed CORS origin).');

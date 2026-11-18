@@ -2,12 +2,15 @@
 # Transur production helper.
 #   ./deploy.sh certs     – obtain a Let's Encrypt certificate for $DOMAIN
 #   ./deploy.sh up        – build and start everything behind Nginx
-#   ./deploy.sh owner EMAIL PASSWORD "Full Name" – create a console owner
+#   ./deploy.sh owner YOUR_EMAIL@example.com YOUR_PASSWORD "YOUR_NAME" – create a console owner
 #   ./deploy.sh logs [service] | status | backup | update | down
 set -euo pipefail
 cd "$(dirname "$0")"
 
 [[ -f .env ]] || { echo "✖ .env not found. Run: cp .env.example .env"; exit 1; }
+if grep -q 'YOUR_' .env; then
+  echo "✖ .env still has YOUR_ placeholder values. Replace them first:"; grep -n 'YOUR_' .env; exit 1
+fi
 set -a; source .env; set +a
 
 compose() { docker compose --profile proxy "$@"; }

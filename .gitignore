@@ -1,59 +1,81 @@
-# Secrets
+# ── Secrets and credentials ───────────────────────────────────────────────────
 .env
 .env.*
+*.env
 !.env.example
+!**/.env.example
 *.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.keystore
+*.jks
+id_rsa*
+id_ed25519*
+credentials.json
+service-account*.json
+secrets/
 
-# Dependencies & builds
+# ── Dependencies ──────────────────────────────────────────────────────────────
 node_modules/
-frontend/.next/
-frontend/out/
-*.tsbuildinfo
+.pnpm-store/
+.yarn/
+.npm/
 
-# Runtime data
-uploads/
-backend/uploads/
-backups/
-nginx/certs/
-nginx/certs-le/
-nginx/acme/
-
-# Logs & OS noise
-*.log
-npm-debug.log*
-.DS_Store
-Thumbs.db
-
-# Dependencies and builds
+# ── Builds and caches ─────────────────────────────────────────────────────────
 .next/
 out/
 dist/
 build/
 coverage/
+.turbo/
+.cache/
+.eslintcache
+*.tsbuildinfo
 next-env.d.ts
-.expo/
-mobile/ios/
-mobile/android/
 
-# Secrets and local settings
-*.key
-*.p12
-*.keystore
-
-# Local data
+# ── Runtime data ──────────────────────────────────────────────────────────────
+uploads/
+backend/uploads/
+backups/
+*.sql.gz
+*.dump
 *.db
 *.db-shm
 *.db-wal
 *.sqlite
 *.sqlite3
-*.zip
-
-# Logs, caches and system files
-.cache/
 tmp/
-.idea/
-.vscode/
+temp/
 
-# AI assistant files
+# ── Deployment (generated certificates) ───────────────────────────────────────
+nginx/certs/
+nginx/certs-le/
+nginx/acme/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Archives ──────────────────────────────────────────────────────────────────
+*.zip
+*.tar.gz
+
+# ── Editors and OS files ──────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── AI assistant files ────────────────────────────────────────────────────────
 .claude/
 CLAUDE.md

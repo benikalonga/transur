@@ -1,6 +1,6 @@
 /**
  * Create (or reset) a console owner account.
- *   npm run staff:owner -- you@example.com 'a-strong-password' "Your Name"
+ *   npm run staff:owner -- YOUR_EMAIL@example.com 'YOUR_PASSWORD' "YOUR_NAME"
  */
 const bcrypt = require('bcryptjs');
 const { randomUUID: uuid } = require('crypto');
