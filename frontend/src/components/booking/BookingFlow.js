@@ -369,7 +369,7 @@ export default function BookingFlow({ service }) {
               onPickOnMap={() => setPicker('dropoff')}
             />
             {route && (
-              <p className="px-1 text-xs font-semibold text-ink-muted">{km(route.km)} · about {minutes(route.min)} by road</p>
+              <p className="px-1 text-xs font-semibold text-ink-muted">{km(route.km)} · about {minutes(route.min)} {route.straight ? '(estimate)' : 'by road'}</p>
             )}
             <Button className="w-full" loading={busy} disabled={!pickup || !dropoff} onClick={() => getQuote()}>
               See prices

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { appSocket } from '@/lib/socket';
-import { distanceKm } from '@/lib/geo';
+import { OFFLINE_MODE, demoLocation, distanceKm } from '@/lib/geo';
 
 const MIN_INTERVAL_MS = 5000; // never send more than one fix every 5 s
 const MIN_MOVE_KM = 0.025; // …unless they moved at least 25 m
@@ -30,6 +30,17 @@ export default function useFleetTracking(active) {
       else api.me.postPosition(pos).catch(() => {});
     };
 
+    // Offline mode (machines with no GPS): use a demo position near the map
+    // centre if no real fix arrives quickly.
+    const useDemo = () => {
+      if (last.current.pos) return;
+      const pos = demoLocation(0.8);
+      setPosition(pos);
+      setError(null);
+      send(pos, true);
+    };
+    const demoTimer = OFFLINE_MODE ? setTimeout(useDemo, 4000) : null;
+
     const watchId = navigator.geolocation.watchPosition(
       ({ coords }) => {
         const pos = { lat: coords.latitude, lng: coords.longitude, heading: coords.heading, speed: coords.speed };
@@ -37,7 +48,10 @@ export default function useFleetTracking(active) {
         setError(null);
         send(pos);
       },
-      (err) => setError(err.code === 1 ? 'Location permission is blocked. Enable it to receive requests.' : 'Weak GPS signal…'),
+      (err) => {
+        if (OFFLINE_MODE) return useDemo();
+        setError(err.code === 1 ? 'Location permission is blocked. Enable it to receive requests.' : 'Weak GPS signal…');
+      },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
     );
     const heartbeat = setInterval(() => last.current.pos && send(last.current.pos, true), HEARTBEAT_MS);
@@ -45,6 +59,7 @@ export default function useFleetTracking(active) {
     return () => {
       navigator.geolocation.clearWatch(watchId);
       clearInterval(heartbeat);
+      if (demoTimer) clearTimeout(demoTimer);
     };
   }, [active]);
 

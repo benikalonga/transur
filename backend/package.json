@@ -2,7 +2,7 @@
   "name": "transur-api",
   "version": "1.0.0",
   "private": true,
-  "description": "Transur — on-demand rides and parcel delivery API",
+  "description": "Transur \u2014 on-demand rides and parcel delivery API",
   "main": "src/server.js",
   "engines": {
     "node": ">=20"
@@ -12,7 +12,8 @@
     "dev": "nodemon src/server.js",
     "db:migrate": "node src/db/migrate.js",
     "staff:owner": "node src/scripts/createOwner.js",
-    "check": "node --check src/server.js"
+    "check": "node --check src/server.js",
+    "smoke": "node src/scripts/smoke.js"
   },
   "dependencies": {
     "axios": "^1.7.7",

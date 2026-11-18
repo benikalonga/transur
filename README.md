@@ -113,7 +113,7 @@ can't send offers until they top up. Staff can also lock or unlock wallets by ha
 |---|---|
 | Web app | Next.js 14 (App Router), React 18, Tailwind CSS, Leaflet + OpenStreetMap, Socket.IO client |
 | API | Node.js 20, Express 4, Socket.IO 4, node-cron |
-| Database | MySQL 8 |
+| Database | MariaDB 10.6+ or MySQL 8 |
 | Auth | SMS one-time codes (Africa's Talking) + JWT; bcrypt for staff passwords |
 | Routing & search | OSRM for routes, Nominatim for address search and reverse geocoding |
 | Ops | Docker Compose, Nginx (TLS, gzip, WebSockets), Let's Encrypt |
@@ -147,6 +147,7 @@ transur/
 │       │   └── console/         # operations console
 │       ├── components/          # booking flow, fleet dashboard, maps, shared screens, console kit, UI
 │       └── lib/                 # API client, sockets, session, geo, formatting
+├── scripts/                     # setup.js and dev.js (run everything without Docker)
 ├── docs/API.md                  # endpoint and event reference
 ├── nginx/nginx.conf
 ├── docker-compose.yml
@@ -155,36 +156,68 @@ transur/
 
 ---
 
-## Running locally
+## Running locally (no Docker needed)
 
-**Requirements:** Node.js 20+, MySQL 8.
-
-### 1. API
+**Requirements:** Node.js 20+ (22 recommended) and MariaDB 10.6+ or MySQL 8. Nothing else: no Docker,
+no global packages, and no internet once packages are installed.
 
 ```bash
-cd backend
-cp .env.example .env        # set DB_* and a JWT_SECRET of 32+ characters
-npm install
-npm run db:migrate          # creates the database, all tables and default fares
-npm run staff:owner -- YOUR_EMAIL@example.com 'YOUR_PASSWORD' "YOUR_NAME"
-npm run dev                 # http://localhost:5000/api/health
+npm run setup -- --offline    # installs packages, creates backend/.env and frontend/.env.local
 ```
 
-In development, SMS codes are printed in the API terminal and mobile money payments settle instantly,
-so you can test every flow without external accounts.
+Leave out `--offline` on a machine with internet and GPS (see [Offline mode](#offline-mode)).
 
-### 2. Web app
+**Create the database user once** with [`backend/db-setup.sql`](backend/db-setup.sql), and put the same
+password in `DB_PASSWORD` in `backend/.env`:
 
 ```bash
-cd frontend
-cp .env.example .env.local  # point NEXT_PUBLIC_API_URL at the API
-npm install
-npm run dev                 # http://localhost:3000
+sudo mariadb < backend/db-setup.sql        # MariaDB (root signs in through the socket)
+mysql -u root -p < backend/db-setup.sql    # MySQL
+```
+
+Then:
+
+```bash
+npm run db:migrate            # creates all tables and default fares
+npm run staff:owner -- YOUR_EMAIL@example.com 'YOUR_PASSWORD' "YOUR_NAME"
+npm run dev                   # API http://localhost:5000/api  ·  web app http://localhost:3000
 ```
 
 - Riders, drivers and couriers sign up at `/login` (pick a role on the last step).
 - Staff sign in at `/console/login` with the owner account created above.
 - Open two browsers (or a private window) to play rider and driver at the same time.
+
+In development, login codes are printed in the API output, and mobile money payments settle instantly, so every
+flow works without SMS or payment accounts. Set `DEV_LOGIN_CODE=123456` in `backend/.env` to use one fixed code
+(never used in production).
+
+### Smoke test
+
+With the API running and `DEV_LOGIN_CODE` set:
+
+```bash
+npm run smoke
+```
+
+It plays a full ride (sign-up, quote, booking, offer, accept, trip, rating, receipt) and checks that a booking
+can't be accepted twice and that the platform fee reaches the driver's wallet. Set `SMOKE_STAFF_EMAIL` and
+`SMOKE_STAFF_PASSWORD` to also check the console.
+
+### Offline mode
+
+`NEXT_PUBLIC_OFFLINE_MODE=1` in `frontend/.env.local` (set by `npm run setup -- --offline`) makes the web app
+work on a machine with no internet and no GPS:
+
+| Online service | Offline replacement |
+|---|---|
+| OpenStreetMap map tiles | A plain grid background; markers and routes still show |
+| OSRM road routes | Straight lines with an estimated time |
+| Nominatim address search | A built-in list of places ([`offlinePlaces.js`](frontend/src/lib/offlinePlaces.js)), or type coordinates like `-11.66, 27.48` |
+| Device GPS | A demo location near `NEXT_PUBLIC_MAP_CENTER` |
+| SMS (Africa's Talking) | Codes printed in the API output (any development setup) |
+
+Fares are always computed on the server from straight-line distance, so prices are the same in both modes.
+The font is bundled with the app, so `next build` also works with no internet.
 
 ### Configuration
 
@@ -197,6 +230,8 @@ npm run dev                 # http://localhost:3000
 | `WALLET_DEBT_LIMIT` | `-5.00` | Balance at which a fleet wallet locks |
 | `REFERRAL_WELCOME_DISCOUNT` / `REFERRAL_REWARD_DISCOUNT` | `1.00` / `1.50` | Referral code values |
 | `PAYMENT_WEBHOOK_SECRET` | — | Shared secret for mobile money callbacks |
+| `DB_SOCKET` | — | Connect through a Unix socket instead of `DB_HOST`/`DB_PORT` |
+| `DEV_LOGIN_CODE` | — | Fixed 6-digit login code in development (tests) |
 
 | Variable (web) | Default | Meaning |
 |---|---|---|
@@ -204,10 +239,13 @@ npm run dev                 # http://localhost:3000
 | `NEXT_PUBLIC_PRICE_STEP` | `0.25` | Smallest offer increment (display currency) |
 | `NEXT_PUBLIC_MAP_CENTER` | `0,0` | Where maps open before GPS is available |
 | `NEXT_PUBLIC_SEARCH_COUNTRY` | — | Restrict address search to a country code |
+| `NEXT_PUBLIC_OFFLINE_MODE` | `0` | `1` = no map tiles, online search, routing or GPS needed |
 
 ---
 
 ## Deploying
+
+Docker is only used for production servers. Local development never needs it.
 
 ```bash
 cp .env.example .env               # fill in every secret and your domain

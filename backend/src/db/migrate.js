@@ -5,10 +5,7 @@ const { tables, fareSeeds } = require('./schema');
 
 async function migrate() {
   const conn = await mysql.createConnection({
-    host: env.db.host,
-    port: env.db.port,
-    user: env.db.user,
-    password: env.db.password,
+    ...env.db.connection(),
     multipleStatements: false,
   });
 

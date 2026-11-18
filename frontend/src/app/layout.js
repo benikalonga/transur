@@ -1,8 +1,14 @@
 import './globals.css';
-import { Plus_Jakarta_Sans } from 'next/font/google';
+import localFont from 'next/font/local';
 import { Toaster } from 'react-hot-toast';
 
-const sans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
+// Bundled with the app (SIL Open Font License), so builds and pages need no internet.
+const sans = localFont({
+  src: './fonts/PlusJakartaSans-Variable.woff2',
+  weight: '200 800',
+  variable: '--font-sans',
+  display: 'swap',
+});
 
 export const metadata = {
   title: { default: 'Transur — Rides & Deliveries', template: '%s · Transur' },

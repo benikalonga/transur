@@ -1,0 +1,20 @@
+{
+  "name": "transur",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Transur: rides and parcel delivery where riders name their price",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "dev": "node scripts/dev.js",
+    "db:migrate": "npm --prefix backend run db:migrate",
+    "staff:owner": "npm --prefix backend run staff:owner --",
+    "smoke": "npm --prefix backend run smoke",
+    "build": "npm --prefix frontend run build",
+    "start:api": "npm --prefix backend start",
+    "start:web": "npm --prefix frontend start"
+  }
+}

@@ -127,3 +127,12 @@
   background: none;
   border: none;
 }
+
+/* Offline mode: a plain street-grid background instead of map tiles. */
+.leaflet-container.map-offline {
+  background-color: #eef0f4;
+  background-image:
+    linear-gradient(rgba(91, 61, 245, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91, 61, 245, 0.08) 1px, transparent 1px);
+  background-size: 32px 32px;
+}

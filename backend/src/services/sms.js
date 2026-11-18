@@ -2,7 +2,9 @@ const crypto = require('crypto');
 const axios = require('axios');
 const env = require('../config/env');
 
-const newCode = () => String(crypto.randomInt(100000, 1000000));
+// DEV_LOGIN_CODE gives a fixed code for tests; it is never used in production.
+const newCode = () =>
+  !env.isProd && env.devLoginCode ? env.devLoginCode : String(crypto.randomInt(100000, 1000000));
 const hashCode = (phone, code) =>
   crypto.createHash('sha256').update(`${phone}:${code}:${env.jwtSecret}`).digest('hex');
 

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { DEFAULT_CENTER } from '@/lib/geo';
+import { DEFAULT_CENTER, OFFLINE_MODE } from '@/lib/geo';
 
 const dot = (color, size = 18, pulse = false) =>
   L.divIcon({
@@ -100,8 +100,9 @@ export default function LeafletMap({
       dragging={interactive}
       scrollWheelZoom={interactive}
       style={{ width: '100%', height: '100%' }}
+      className={OFFLINE_MODE ? 'map-offline' : undefined}
     >
-      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19} />
+      {!OFFLINE_MODE && <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19} />}
       {fitTo && <Camera points={fitTo} padTop={padTop} padBottom={padBottom} follow={follow} />}
       {onCenterChange && <CenterReporter onMove={onCenterChange} />}
       {route?.length > 1 && (

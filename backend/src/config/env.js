@@ -19,6 +19,9 @@ const env = {
     name: process.env.DB_NAME || 'transur',
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
+    // Optional Unix socket (e.g. /run/mysqld/mysqld.sock). Used instead of host/port when set,
+    // which lets a local MariaDB/MySQL root account sign in without a password.
+    socket: process.env.DB_SOCKET || '',
   },
 
   jwtSecret: secret(process.env.JWT_SECRET),
@@ -26,6 +29,7 @@ const env = {
   staffJwtTtl: process.env.STAFF_JWT_TTL || '12h',
   otpTtlMinutes: num(process.env.OTP_TTL_MINUTES, 10),
   otpMaxAttempts: num(process.env.OTP_MAX_ATTEMPTS, 5),
+  devLoginCode: /^\d{6}$/.test(process.env.DEV_LOGIN_CODE || '') ? process.env.DEV_LOGIN_CODE : '',
 
   sms: {
     apiKey: secret(process.env.SMS_API_KEY),
@@ -44,6 +48,13 @@ const env = {
 
   paymentWebhookSecret: secret(process.env.PAYMENT_WEBHOOK_SECRET),
 };
+
+/** Connection settings shared by the pool and the migration script (MySQL 8 or MariaDB 10.6+). */
+env.db.connection = () => ({
+  ...(env.db.socket ? { socketPath: env.db.socket } : { host: env.db.host, port: env.db.port }),
+  user: env.db.user,
+  password: env.db.password,
+});
 
 env.isProd = env.nodeEnv === 'production';
 env.isDev = env.nodeEnv === 'development';
